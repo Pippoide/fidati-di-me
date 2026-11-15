@@ -104,3 +104,28 @@ write('altro.tmp', 100, tmp);
   console.error(err);
   process.exit(1);
 });
+
+// ── updater: confronto versioni e scelta del pacchetto ─────────────────────
+{
+  const { isNewer, pickAsset, check } = require('./updater.cjs');
+  assert.ok(isNewer('1.0.10', '1.0.9'));
+  assert.ok(isNewer('v1.1.0', '1.0.99'));
+  assert.ok(!isNewer('1.0.3', '1.0.3'));
+  assert.ok(!isNewer('1.0.2', '1.0.3'));
+  const base = 'https://github.com/Pippoide/fidati-di-me/releases/download/v1.0.5/';
+  const assets = [
+    { name: 'Fidati-1.0.5-arm64.dmg', browser_download_url: base + 'Fidati-1.0.5-arm64.dmg' },
+    { name: 'Fidati-1.0.5-arm64.zip', browser_download_url: base + 'Fidati-1.0.5-arm64.zip' },
+    { name: 'Fidati-1.0.5-x64.zip', browser_download_url: base + 'Fidati-1.0.5-x64.zip' },
+  ];
+  assert.strictEqual(pickAsset(assets, 'x64').name, 'Fidati-1.0.5-x64.zip');
+  assert.strictEqual(pickAsset(assets, 'arm64').name, 'Fidati-1.0.5-arm64.zip');
+  // un pacchetto ospitato altrove non viene mai accettato
+  assert.strictEqual(pickAsset([{ name: 'Fidati-9-x64.zip', browser_download_url: 'https://evil.example/Fidati-9-x64.zip' }], 'x64'), undefined);
+  const fake = (body, status = 200) => async () => ({ ok: status === 200, status, json: async () => body });
+  check({ current: '1.0.4', arch: 'arm64', fetchImpl: fake({ tag_name: 'v1.0.5', assets, html_url: 'x' }) }).then((u) =>
+    assert.strictEqual(u.latest, '1.0.5')
+  );
+  check({ current: '1.0.5', arch: 'arm64', fetchImpl: fake({ tag_name: 'v1.0.5', assets }) }).then((u) => assert.strictEqual(u.latest, undefined));
+  check({ current: '1.0.0', fetchImpl: fake({}, 404) }).then((u) => assert.strictEqual(u.latest, undefined));
+}

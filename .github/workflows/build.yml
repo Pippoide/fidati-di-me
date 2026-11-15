@@ -1,0 +1,51 @@
+# A ogni push sul branch "build": compila Fidati.app su un Mac di GitHub
+# e pubblica una nuova release (dmg per installare, zip per l'updater interno).
+name: Build Fidati
+
+on:
+  push:
+    branches: [build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    env:
+      VERSION: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installa le dipendenze
+        run: npm ci
+
+      - name: Test della logica di analisi ed eliminazione
+        run: npm test
+
+      - name: Imposta la versione ${{ env.VERSION }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Compila Fidati.app (Apple Silicon + Intel)
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Pubblica la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" release/*.dmg release/*.zip \
+            --target "$GITHUB_SHA" \
+            --title "Fidati $VERSION" \
+            --notes "Scarica il file .dmg: **arm64** per Mac con chip Apple (M1 e successivi), **x64** per Mac Intel. Chi ha già Fidati installata riceve l'aggiornamento dall'app."

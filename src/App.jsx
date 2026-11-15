@@ -3,6 +3,7 @@ import { api } from './lib/api';
 import { formatBytes, formatCount, shortPath } from './lib/format';
 import GroupCard from './components/GroupCard';
 import ConfirmDialog from './components/ConfirmDialog';
+import UpdateBanner from './components/UpdateBanner';
 
 const LEVELS = [
   { id: 'safe', color: 'bg-safe', title: 'Si può eliminare', hint: 'Cache, log e file temporanei. È ciò che pulisce “Fidati di me”.' },
@@ -188,6 +189,7 @@ export default function App() {
 
       {/* ── contenuto ────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto px-8 py-6">
+        <UpdateBanner />
         {api.isMock && (
           <p className="mb-4 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[12px] text-caution">
             Anteprima nel browser con dati di esempio: qui non viene analizzato né eliminato nulla.

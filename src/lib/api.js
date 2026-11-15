@@ -66,6 +66,13 @@ const mock = {
     return [];
   },
   openPrivacy() {},
+  async checkUpdate() {
+    return { current: 'anteprima' };
+  },
+  async installUpdate() {},
+  onUpdateProgress() {
+    return () => {};
+  },
   onProgress(cb) {
     progressCb = cb;
     return () => (progressCb = () => {});

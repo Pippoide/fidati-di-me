@@ -4,6 +4,7 @@ const path = require('path');
 const fsp = require('fs').promises;
 const os = require('os');
 const { scan, removeItem, runningAdobeApps } = require('./scanner.cjs');
+const updater = require('./updater.cjs');
 
 const DEV = process.env.FIDATI_DEV === '1';
 app.setName('Fidati');
@@ -91,6 +92,32 @@ ipcMain.handle('fidati:reveal', (_e, id) => {
 ipcMain.handle('fidati:open-privacy', () =>
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles')
 );
+
+// ── aggiornamenti ────────────────────────────────────────────────────────────
+let pendingUpdate = null;
+
+ipcMain.handle('fidati:update-check', async () => {
+  const current = app.getVersion();
+  if (!app.isPackaged) return { current }; // in sviluppo non si aggiorna
+  try {
+    pendingUpdate = await updater.check({ current });
+    const { latest, size, page } = pendingUpdate;
+    return { current, latest, size, page };
+  } catch {
+    return { current }; // offline o GitHub non raggiungibile: si riprova al prossimo avvio
+  }
+});
+
+ipcMain.handle('fidati:update-install', async () => {
+  if (!pendingUpdate || !pendingUpdate.latest) throw new Error('Nessun aggiornamento disponibile');
+  if (scanning) throw new Error('Aspetta la fine dell’analisi');
+  const swapAndRelaunch = await updater.prepare(pendingUpdate, {
+    tmpDir: app.getPath('temp'),
+    onProgress: (p) => win && !win.isDestroyed() && win.webContents.send('fidati:update-progress', p),
+  });
+  swapAndRelaunch();
+  app.quit();
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());

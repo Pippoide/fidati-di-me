@@ -2,13 +2,49 @@
 
 Una piccola app per macOS che analizza le cartelle del tuo Mac, raggruppa i file per tipo e ti aiuta a liberare spazio senza rompere niente.
 
-Si apre con un doppio clic su **`fidati.command`** e gira in una finestra sua, non nel browser. L'interfaccia è scritta in **React** e **Tailwind CSS**, quindi puoi modificarla come un normale progetto front-end.
+Gira in una finestra sua, non nel browser, e si aggiorna da sola tramite GitHub. L'interfaccia è scritta in **React** e **Tailwind CSS**, quindi puoi modificarla come un normale progetto front-end.
 
 ---
 
-## Avvio rapido
+## Installare l'app (senza Terminale)
 
-1. Decomprimi la cartella `fidati` dove preferisci (per esempio in `Documenti`).
+1. Vai su [Releases](https://github.com/Pippoide/fidati-di-me/releases/latest) e scarica il `.dmg`: **arm64** per i Mac con chip Apple (M1 e successivi), **x64** per i Mac Intel.
+2. Apri il `.dmg` e trascina **Fidati** in **Applicazioni**.
+3. Al primo avvio macOS la blocca, perché l'app non ha un certificato Apple a pagamento: vai in *Impostazioni di Sistema → Privacy e sicurezza* e premi **Apri comunque**. Si fa una volta sola.
+4. Per un'analisi completa: *Privacy e sicurezza → Accesso completo al disco* → attiva **Fidati**.
+
+### Aggiornamenti
+
+All'avvio Fidati controlla se su GitHub c'è una versione più nuova. Se c'è, compare un avviso con il pulsante **Aggiorna e riavvia**: l'app scarica la nuova versione, sostituisce sé stessa e si riapre.
+
+- L'app deve stare in **Applicazioni** (non va aperta direttamente dal `.dmg`).
+- Dopo un aggiornamento macOS può chiedere di riattivare "Accesso completo al disco": senza certificato Apple vede la nuova versione come un'app diversa.
+
+---
+
+## Pubblicare una nuova versione
+
+| Branch | A cosa serve |
+| --- | --- |
+| `dev` | Dove si lavora. I push qui non producono nulla. |
+| `build` | Rilascio. Ogni push qui fa partire la build su GitHub. |
+
+Quando `dev` è pronto, portalo in `build` (pull request `dev → build` su GitHub, oppure `git checkout build && git merge dev && git push`). GitHub Actions (`.github/workflows/build.yml`) allora:
+
+1. accende un Mac, installa le dipendenze ed esegue i test;
+2. assegna la versione `1.0.N`, dove N cresce da solo a ogni build;
+3. compila `Fidati.app` per Apple Silicon e Intel;
+4. pubblica una release con i `.dmg` (per installare) e gli `.zip` (per l'updater).
+
+Dopo qualche minuto chi ha Fidati installata trova l'avviso di aggiornamento al prossimo avvio. L'avanzamento si vede nella scheda **Actions** della repo.
+
+---
+
+## Avvio per sviluppo (`fidati.command`)
+
+Per lavorare sul codice senza passare dalla build:
+
+1. Clona la repo.
 2. Fai doppio clic su **`fidati.command`**.
 3. Al primo avvio lo script installa le dipendenze (un paio di minuti, serve internet). Dal secondo in poi l'app si apre subito.
 
@@ -30,7 +66,7 @@ Il file arriva da internet, quindi al primo doppio clic macOS può dire che "non
 
 macOS non lascia leggere alcune cartelle (Cestino, Mail, parte di `~/Library`) senza permesso. Per un'analisi completa:
 
-*Impostazioni di Sistema → Privacy e sicurezza → Accesso completo al disco* → attiva **Terminale**.
+*Impostazioni di Sistema → Privacy e sicurezza → Accesso completo al disco* → attiva **Fidati** (o **Terminale**, se la avvii da `fidati.command`).
 
 Senza questo permesso l'app funziona lo stesso: salta semplicemente ciò che non può leggere.
 
@@ -110,7 +146,8 @@ fidati/
 │   ├── index.css           colori e font (blocco @theme di Tailwind 4)
 │   ├── components/
 │   │   ├── GroupCard.jsx   un gruppo con l'elenco delle voci
-│   │   └── ConfirmDialog.jsx
+│   │   ├── ConfirmDialog.jsx
+│   │   └── UpdateBanner.jsx
 │   └── lib/
 │       ├── api.js          ponte verso il sistema + dati di esempio
 │       └── format.js       formattazione di byte e percorsi
@@ -118,6 +155,7 @@ fidati/
     ├── main.cjs            finestra e comunicazione con l'interfaccia
     ├── preload.cjs         funzioni esposte a React (window.fidati)
     ├── scanner.cjs         analisi ed eliminazione
+    ├── updater.cjs         aggiornamento da GitHub Releases
     ├── categories.cjs      gruppi, estensioni, regole Adobe
     └── selftest.cjs        test su file finti
 ```
@@ -150,7 +188,7 @@ Dopo ogni modifica a `electron/scanner.cjs` lancia `./fidati.command test`.
 ## Compatibilità e limiti
 
 - Funziona su Mac **Intel e Apple Silicon**. La versione di macOS minima dipende da Electron: quella indicata in `package.json` richiede un macOS recente. Per un Mac più vecchio abbassa la versione di `electron` in `package.json` (per esempio `^32` per macOS 10.15), elimina `node_modules` e riapri `fidati.command`.
-- La finestra del Terminale resta aperta mentre l'app gira: chiudendola si chiude anche l'app.
+- Avviata da `fidati.command`, la finestra del Terminale resta aperta mentre l'app gira: chiudendola si chiude anche l'app. L'app installata dal `.dmg` non ha questo limite.
 - Le cache di sistema in `/Library/Caches` e `/System` richiedono privilegi di amministratore e sono volutamente escluse.
 - Dischi esterni e altri utenti del Mac non vengono analizzati.
 - I file solo su iCloud (non scaricati) contano 0 byte, perché non occupano spazio sul disco. Attenzione: eliminare un file in una cartella sincronizzata con iCloud lo toglie anche da iCloud (resta comunque nel Cestino).

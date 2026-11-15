@@ -10,17 +10,43 @@
     "dev": "vite",
     "build": "vite build",
     "start": "electron .",
-    "test": "node electron/selftest.cjs"
-  },
-  "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "test": "node electron/selftest.cjs",
+    "dist": "vite build && electron-builder --mac --arm64 --x64 --publish never"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.3.0",
+    "electron-builder": "^26.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "tailwindcss": "^4.3.0",
     "vite": "^8.3.0"
+  },
+  "author": "Pippoide",
+  "build": {
+    "appId": "com.pippoide.fidati",
+    "productName": "Fidati",
+    "files": [
+      "dist/**",
+      "electron/**",
+      "!electron/selftest.cjs",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "artifactName": "Fidati-${version}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "publish": null
   }
 }
