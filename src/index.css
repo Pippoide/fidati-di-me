@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+/* Palette e font dell'app: cambia qui per ridisegnare tutto. */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-display: 'SF Pro Rounded', ui-rounded, -apple-system, sans-serif;
+
+  --color-ink: #0c0c0e;
+  --color-panel: #151518;
+  --color-raised: #1d1d21;
+  --color-line: #2a2a30;
+  --color-muted: #8b8b95;
+  --color-text: #ececf0;
+
+  --color-safe: #b6f36a;
+  --color-caution: #f5b955;
+  --color-protected: #f0715f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* zona trascinabile della finestra (barra del titolo nascosta) */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 5px;
+  border: 1.5px solid #4a4a54;
+  background: transparent;
+  display: grid;
+  place-content: center;
+}
+input[type='checkbox']:checked,
+input[type='checkbox']:indeterminate {
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+input[type='checkbox']:checked::after {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid var(--color-ink);
+  border-bottom: 2px solid var(--color-ink);
+  transform: translateY(-1px) rotate(-45deg);
+}
+input[type='checkbox']:indeterminate::after {
+  content: '';
+  width: 8px;
+  height: 2px;
+  background: var(--color-ink);
+}
+input[type='checkbox']:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-safe);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2e2e35;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
