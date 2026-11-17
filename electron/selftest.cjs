@@ -10,7 +10,8 @@ const assert = require('assert');
 const { scan, removeItem, assertDeletable } = require('./scanner.cjs');
 const { listDisks, listFolders, cloudRoots, onDisk } = require('./disks.cjs');
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fidati-test-'));
+// realpath: su macOS la cartella temporanea (/var/folders/…) è un link a /private/var/…
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'fidati-test-')));
 const home = path.join(root, 'home');
 const tmp = path.join(root, 'tmp');
 const vol = path.join(root, 'Volumes', 'Lavori');
