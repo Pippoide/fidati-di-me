@@ -74,9 +74,27 @@ Senza questo permesso l'app funziona lo stesso: salta semplicemente ciò che non
 
 ## Come funziona
 
+### Scegli il disco
+
+Nella colonna a sinistra trovi il **disco di sistema** (di solito *Macintosh HD*) e i **dischi esterni** collegati. Fidati lavora **su un disco alla volta**: l'analisi, "Fidati di me" e ogni eliminazione restano sul disco scelto, e nulla di ciò che sta su un altro disco viene toccato, nemmeno un disco montato dentro una cartella.
+
+- **Disco di sistema**: si analizzano la tua cartella Inizio, `~/Library`, le applicazioni e i file temporanei.
+- **Disco esterno**: si analizza tutto il disco, tranne le cartelle di sistema nascoste (Spotlight, `.fseventsd`, ecc.).
+- **Non selezionabili**: dischi di backup Time Machine, dischi con un'installazione di macOS e dischi di sola lettura (per esempio un `.dmg` aperto).
+
+L'elenco si aggiorna da solo quando colleghi o espelli un disco e torni sulla finestra di Fidati. Se espelli il disco analizzato, i risultati vengono azzerati.
+
+### Escludi cartelle
+
+Sotto il disco ci sono le sue cartelle principali (per il disco di sistema: Documenti, Download, Scrivania… più Dropbox, iCloud Drive, Google Drive e OneDrive). **Togli la spunta** a una cartella per escluderla: non viene analizzata e non viene toccata, nemmeno da "Fidati di me". Con **+ Escludi un'altra cartella…** puoi escluderne una qualsiasi, anche in profondità.
+
+- Le cartelle sincronizzate con un cloud partono **escluse**: eliminare un file lì lo toglie anche dal cloud e dagli altri dispositivi. Se le includi, i loro file sono segnati con l'etichetta *cloud* e la conferma te lo ricorda.
+- Le esclusioni vengono salvate e restano valide ai riavvii (in `~/Library/Application Support/Fidati/settings.json`).
+- Se cambi le esclusioni dopo un'analisi, i risultati vengono azzerati: rifai l'analisi. In ogni caso l'eliminazione ricontrolla le esclusioni attuali.
+
 ### Analizza
 
-Esamina la tua cartella utente, `~/Library`, le applicazioni installate e i file temporanei, poi mostra tutto diviso in gruppi, su tre livelli:
+Esamina il disco scelto, poi mostra tutto diviso in gruppi, su tre livelli:
 
 | Livello | Cosa contiene | Cosa puoi fare |
 | --- | --- | --- |
@@ -90,13 +108,15 @@ Ogni gruppo si apre per vedere le singole voci, selezionarle una a una e mostrar
 
 - **Cache e log** → eliminati direttamente (delle cartelle si svuota il contenuto, la cartella resta al suo posto).
 - **I tuoi file personali** (documenti, foto, video, archivi…) → spostati nel **Cestino**, quindi recuperabili.
-- **`node_modules`, backup iOS, svuotamento del Cestino** → definitivi, e la finestra di conferma lo dice.
+- **`node_modules`, backup iOS, svuotamento del Cestino** → definitivi, e la finestra di conferma lo dice. Il Cestino svuotato è solo quello del disco scelto.
 
 ### Fidati di me
 
 Un solo pulsante: seleziona **tutti e soli i gruppi verdi** e li pulisce, dopo averti mostrato il riepilogo con lo spazio che recupererai. È la pulizia di ciò che macOS chiama "Dati di sistema" nello spazio di archiviazione: cache, log e file temporanei che le app ricreano da sole.
 
 Non tocca mai documenti, preferenze, licenze, password, cronologia dei browser, file del sistema operativo. Non svuota nemmeno il Cestino: quello resta una tua scelta.
+
+Su un **disco esterno** "Fidati di me" pulisce solo le cache multimediali Adobe che trova (cartelle `Media Cache Files` e `Peak Files`, per chi ha spostato la cache di Premiere o After Effects su un disco di lavoro).
 
 Dopo la pulizia le app possono essere un po' più lente al primo avvio, perché ricostruiscono la cache. È normale.
 
@@ -119,8 +139,9 @@ Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta
 ## Sicurezza
 
 - L'interfaccia non manda mai percorsi al sistema, solo l'identificativo di una voce trovata dall'ultima analisi.
-- Prima di ogni eliminazione c'è un ultimo controllo (`assertDeletable` in `electron/scanner.cjs`): rifiuta tutto ciò che è fuori dalla cartella utente, le cartelle principali (`Documenti`, `Scrivania`, `Download`, `Library`…) e, dentro `~/Library`, qualunque cosa non sia in un elenco ristretto di cartelle di cache e log.
-- I link simbolici non vengono mai seguiti.
+- Prima di ogni eliminazione c'è un ultimo controllo (`assertDeletable` in `electron/scanner.cjs`): rifiuta tutto ciò che è fuori dal disco scelto, le cartelle escluse (anche quelle aggiunte dopo l'analisi), le cartelle principali (`Documenti`, `Scrivania`, `Download`, `Library`…), la radice delle cartelle cloud e, dentro `~/Library`, qualunque cosa non sia in un elenco ristretto di cartelle di cache e log. Su un disco esterno rifiuta le cartelle di sistema del disco.
+- Ogni file viene ricontrollato al momento dell'eliminazione: se non sta più sul disco analizzato (o il disco è stato scollegato), non si tocca.
+- I link simbolici non vengono mai seguiti, e l'analisi non entra in altri dischi montati dentro una cartella.
 - L'app non chiede la password di amministratore e non si collega a internet.
 
 Puoi verificare la logica su file finti, senza toccare nulla di reale:
@@ -147,6 +168,7 @@ fidati/
 │   ├── components/
 │   │   ├── GroupCard.jsx   un gruppo con l'elenco delle voci
 │   │   ├── ConfirmDialog.jsx
+│   │   ├── Sidebar.jsx     scelta del disco e cartelle escluse
 │   │   └── UpdateBanner.jsx
 │   └── lib/
 │       ├── api.js          ponte verso il sistema + dati di esempio
@@ -154,7 +176,8 @@ fidati/
 └── electron/               ── SISTEMA (Node) ──
     ├── main.cjs            finestra e comunicazione con l'interfaccia
     ├── preload.cjs         funzioni esposte a React (window.fidati)
-    ├── scanner.cjs         analisi ed eliminazione
+    ├── scanner.cjs         analisi ed eliminazione (un disco alla volta)
+    ├── disks.cjs           dischi collegati e cartelle proposte
     ├── updater.cjs         aggiornamento da GitHub Releases
     ├── categories.cjs      gruppi, estensioni, regole Adobe
     └── selftest.cjs        test su file finti
@@ -179,7 +202,9 @@ In alternativa `npm run dev` e apri `http://localhost:5173` nel browser: lì l'i
 | Aggiungere un gruppo o un'estensione | `electron/categories.cjs` (`GROUPS`, `EXT_GROUP`) |
 | Spostare un gruppo tra verde / arancione / rosso | campo `level` in `GROUPS` |
 | Aggiungere una cartella da pulire | `electron/scanner.cjs`: aggiungila all'analisi **e** a `LIBRARY_ALLOWED`, altrimenti il controllo di sicurezza la rifiuta |
-| Riconoscere altre cache Adobe | `ADOBE_RE` e `ADOBE_LOG_RE` in `electron/categories.cjs` |
+| Riconoscere altre cache Adobe | `ADOBE_RE`, `ADOBE_LOG_RE` e `ADOBE_CACHE_DIRS` in `electron/categories.cjs` |
+| Riconoscere altre cartelle cloud | `CLOUD_NAME_RE` in `electron/categories.cjs` |
+| Cambiare quando un disco non è selezionabile | `whyNot` in `electron/disks.cjs` |
 
 Dopo ogni modifica a `electron/scanner.cjs` lancia `./fidati.command test`.
 
@@ -190,6 +215,7 @@ Dopo ogni modifica a `electron/scanner.cjs` lancia `./fidati.command test`.
 - Funziona su Mac **Intel e Apple Silicon**. La versione di macOS minima dipende da Electron: quella indicata in `package.json` richiede un macOS recente. Per un Mac più vecchio abbassa la versione di `electron` in `package.json` (per esempio `^32` per macOS 10.15), elimina `node_modules` e riapri `fidati.command`.
 - Avviata da `fidati.command`, la finestra del Terminale resta aperta mentre l'app gira: chiudendola si chiude anche l'app. L'app installata dal `.dmg` non ha questo limite.
 - Le cache di sistema in `/Library/Caches` e `/System` richiedono privilegi di amministratore e sono volutamente escluse.
-- Dischi esterni e altri utenti del Mac non vengono analizzati.
-- I file solo su iCloud (non scaricati) contano 0 byte, perché non occupano spazio sul disco. Attenzione: eliminare un file in una cartella sincronizzata con iCloud lo toglie anche da iCloud (resta comunque nel Cestino).
+- Si analizza un disco alla volta. Sul disco di sistema si guarda solo la tua cartella Inizio: gli altri utenti del Mac non vengono analizzati.
+- I dischi esterni formattati NTFS (Windows) sono di sola lettura su macOS, quindi non selezionabili. I dischi di rete compaiono nell'elenco ma l'analisi può essere lenta.
+- I file solo nel cloud (non scaricati) contano 0 byte, perché non occupano spazio sul disco. Eliminare un file in una cartella sincronizzata lo toglie anche dal cloud (resta comunque nel Cestino): per questo quelle cartelle partono escluse.
 - La prima analisi di un disco molto pieno può durare qualche minuto.

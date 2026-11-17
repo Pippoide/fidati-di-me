@@ -14,7 +14,7 @@ const GROUPS = [
     level: 'safe',
     title: 'Cache Adobe',
     description:
-      'Media Cache, Peak Files, cache di Photoshop, Premiere, After Effects, Lightroom, Camera Raw, Bridge e log di Creative Cloud.',
+      'Media Cache, Peak Files (anche su dischi esterni), cache di Photoshop, Premiere, After Effects, Lightroom, Camera Raw, Bridge e log di Creative Cloud.',
   },
   {
     id: 'app-cache',
@@ -46,7 +46,7 @@ const GROUPS = [
     id: 'trash',
     level: 'caution',
     title: 'Cestino',
-    description: 'Svuotare il Cestino è definitivo.',
+    description: 'Solo il Cestino di questo disco. Svuotarlo è definitivo.',
   },
   {
     id: 'node-modules',
@@ -175,7 +175,31 @@ const ADOBE_LOG_RE = /adobe|creative ?cloud|csxs|^ngl|pdapp|amt3|oobelib|coresyn
 const ADOBE_APP_RE = /\/Applications\/Adobe [^/]+\/([^/]+)\.app\/Contents\/MacOS\//;
 const ADOBE_BACKGROUND_RE = /creative cloud|ccx|core ?sync|ipc|crash|helper|update|desktop service/i;
 
+/** cartelle di cache Adobe riconosciute ovunque (anche su dischi esterni): se ne svuota il contenuto */
+const ADOBE_CACHE_DIRS = new Set(['Media Cache Files', 'Peak Files']);
+
+/** cartelle di sistema nella radice di un disco esterno: mai analizzate né toccate */
+const VOLUME_SYSTEM_TOP = new Set(['System Volume Information', '$RECYCLE.BIN', 'Backups.backupdb', 'lost+found']);
+
+/** cartelle sincronizzate con un cloud (nella cartella Inizio) */
+const CLOUD_NAME_RE = /^(dropbox|google ?drive|onedrive|box|pcloud|mega|icloud drive)\b/i;
+
+/** nomi italiani delle cartelle standard, come nel Finder */
+const HOME_LABELS = {
+  Desktop: 'Scrivania',
+  Documents: 'Documenti',
+  Downloads: 'Download',
+  Movies: 'Filmati',
+  Music: 'Musica',
+  Pictures: 'Immagini',
+  Public: 'Pubblica',
+};
+
 module.exports = {
+  ADOBE_CACHE_DIRS,
+  VOLUME_SYSTEM_TOP,
+  CLOUD_NAME_RE,
+  HOME_LABELS,
   GROUPS,
   EXT_GROUP,
   PACKAGE_GROUP,

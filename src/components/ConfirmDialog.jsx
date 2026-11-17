@@ -21,8 +21,13 @@ export default function ConfirmDialog({ plan, busy, onCancel, onConfirm }) {
         <p className="mt-1 text-[13px] text-muted">
           {plan.trust
             ? 'Elimino solo cache, log e file temporanei: le app li ricreano da sole. Nessun documento, nessuna impostazione, nessun file di sistema.'
-            : `${formatCount(plan.count)} elementi, ${formatBytes(plan.size)} in totale.`}
+            : `${formatCount(plan.count)} ${plan.count === 1 ? 'elemento' : 'elementi'}, ${formatBytes(plan.size)} in totale.`}
         </p>
+        {plan.diskName && (
+          <p className="mt-2 text-[12px] text-muted">
+            Disco: <span className="text-text">{plan.diskName}</span>. Gli altri dischi e le cartelle escluse non vengono toccati.
+          </p>
+        )}
 
         <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto rounded-lg bg-raised p-3 text-[13px]">
           {plan.groups.map((g) => (
@@ -44,10 +49,16 @@ export default function ConfirmDialog({ plan, busy, onCancel, onConfirm }) {
               saltata. Chiudi le app Adobe e riprova per pulirla.
             </p>
           )}
+          {plan.hasCloud && (
+            <p className="rounded-lg border border-caution/40 bg-caution/10 p-2.5 text-caution">
+              Alcuni file sono in una cartella sincronizzata (Dropbox, iCloud Drive…): eliminarli li toglie anche dal cloud e dagli
+              altri dispositivi.
+            </p>
+          )}
           {plan.hasTrash && <p className="text-muted">I tuoi file personali vanno nel Cestino: puoi recuperarli da lì.</p>}
           {(plan.hasPermanent || plan.hasEmptyTrash) && (
             <p className="text-caution">
-              {plan.hasEmptyTrash ? 'Lo svuotamento del Cestino' : 'L’eliminazione di node_modules e backup'} è definitiva.
+              {plan.hasEmptyTrash ? 'Lo svuotamento del Cestino di questo disco' : 'L’eliminazione di node_modules e backup'} è definitiva.
             </p>
           )}
           {plan.trust && <p className="text-muted">Consiglio: chiudi le altre app prima di procedere.</p>}

@@ -72,7 +72,17 @@ export default function GroupCard({ group, selected, onToggleGroup, onToggleItem
                 />
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px]">{it.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px]">{it.name}</span>
+                  {it.cloud && (
+                    <span
+                      className="flex-none rounded border border-caution/40 px-1 text-[10px] leading-4 text-caution"
+                      title="In una cartella sincronizzata con il cloud"
+                    >
+                      cloud
+                    </span>
+                  )}
+                </span>
                 <span className="block truncate text-[11px] text-muted">{it.note || shortPath(it.path)}</span>
               </span>
               <button

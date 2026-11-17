@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { api, errorText } from '../lib/api';
 import { formatBytes } from '../lib/format';
 
 /** All'avvio controlla se su GitHub c'è una versione più nuova e propone di installarla. */
@@ -22,7 +22,7 @@ export default function UpdateBanner() {
     try {
       await api.installUpdate(); // l'app si chiude e si riapre aggiornata
     } catch (e) {
-      setError((e.message || String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+      setError(errorText(e));
       setState('error');
     }
   };

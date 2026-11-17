@@ -3,7 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Tutto ciò che l'interfaccia React può chiedere al sistema passa da qui.
 contextBridge.exposeInMainWorld('fidati', {
-  scan: () => ipcRenderer.invoke('fidati:scan'),
+  listDisks: () => ipcRenderer.invoke('fidati:disks'),
+  listFolders: (diskId) => ipcRenderer.invoke('fidati:folders', diskId),
+  setExcluded: (diskId, folder, excluded) => ipcRenderer.invoke('fidati:set-excluded', diskId, folder, excluded),
+  pickExcluded: (diskId) => ipcRenderer.invoke('fidati:pick-excluded', diskId),
+  scan: (diskId) => ipcRenderer.invoke('fidati:scan', diskId),
   remove: (ids) => ipcRenderer.invoke('fidati:remove', ids),
   reveal: (id) => ipcRenderer.invoke('fidati:reveal', id),
   adobeRunning: () => ipcRenderer.invoke('fidati:adobe-running'),
