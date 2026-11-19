@@ -62,6 +62,7 @@ const mockDisks = [
   { id: 'system', name: 'Macintosh HD', kind: 'system', root: '/Users/tu', total: 494 * GB, free: 41 * GB },
   { id: '/Volumes/Lavori', name: 'Lavori', kind: 'external', root: '/Volumes/Lavori', total: 2000 * GB, free: 312 * GB },
   { id: '/Volumes/Backup', name: 'Backup', kind: 'external', root: '/Volumes/Backup', total: 4000 * GB, free: 900 * GB, disabled: 'Disco di backup Time Machine' },
+  { id: '/Volumes/Recoverable', name: 'Recoverable', kind: 'external', root: '/Volumes/Recoverable', total: 0, free: 0, readOnly: true, note: 'Disk Drill', disabled: 'Disco di sola lettura' },
 ];
 
 const mockFolders = {

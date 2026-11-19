@@ -45,7 +45,11 @@
       "category": "public.app-category.utilities",
       "identity": "-",
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSRemovableVolumesUsageDescription": "Fidati legge i dischi esterni per analizzarli e per copiare i progetti.",
+        "NSNetworkVolumesUsageDescription": "Fidati legge i dischi virtuali e di rete (per esempio quelli montati da Disk Drill) per copiarne i progetti."
+      }
     },
     "publish": null
   }

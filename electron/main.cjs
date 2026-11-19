@@ -223,7 +223,7 @@ ipcMain.handle('transfer:pick', async (_e, which, diskId) => {
   let root;
   if (diskId) {
     const disk = await findDisk(diskId);
-    if (which === 'dest' && disk.disabled) throw new Error(`${disk.name}: ${disk.disabled}`);
+    if (which === 'dest' && disk.disabled) throw new Error(`${disk.name}: ${disk.disabled}, non può essere l’arrivo`);
     root = disk.root;
   } else {
     const res = await dialog.showOpenDialog(win, {

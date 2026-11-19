@@ -64,7 +64,7 @@ function PickCard({ title, hint, which, value, disks, locked, onPick }) {
           <p className="truncate font-display text-lg font-semibold">{value.name}</p>
           <p className="truncate text-[12px] text-muted" title={value.root}>
             {shortPath(value.root)}
-            {value.total ? ` · ${formatBytes(value.free)} liberi` : ''}
+            {which === 'dest' && value.total ? ` · ${formatBytes(value.free)} liberi` : ''}
           </p>
         </div>
       ) : (
@@ -72,10 +72,16 @@ function PickCard({ title, hint, which, value, disks, locked, onPick }) {
       )}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {disks
-          .filter((d) => !d.disabled)
+          // la partenza si legge soltanto: vanno bene anche i dischi di sola lettura (es. Disk Drill)
+          .filter((d) => (which === 'src' ? true : !d.disabled))
           .map((d) => (
-            <button key={d.id} className={btn} disabled={locked} onClick={() => onPick(which, d.id)}>
+            <button key={d.id} className={btn} disabled={locked} onClick={() => onPick(which, d.id)} title={d.root}>
               {d.name}
+              {(d.note || d.readOnly) && (
+                <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted">
+                  {[d.note, d.readOnly && 'sola lettura'].filter(Boolean).join(' · ')}
+                </span>
+              )}
             </button>
           ))}
         <button className={btn} disabled={locked} onClick={() => onPick(which)}>
@@ -363,7 +369,7 @@ export default function TransferView({ disks }) {
       {/* ── 1 ── */}
       <section className="grid gap-3 md:grid-cols-2">
         <PickCard title="Partenza" which="src" value={src} disks={disks} locked={locked} onPick={pick}
-          hint="Il disco o la cartella da cui copiare. Non viene modificata." />
+          hint="Il disco o la cartella da cui copiare. Non viene modificata: va bene anche un disco di sola lettura, come quelli montati da Disk Drill." />
         <PickCard title="Arrivo" which="dest" value={dest} disks={disks} locked={locked} onPick={pick}
           hint="Il disco o la cartella in cui sistemare i progetti." />
       </section>

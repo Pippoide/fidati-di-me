@@ -194,7 +194,7 @@ const dev = (p) => fs.lstatSync(p).dev;
     fs.symlinkSync('/', path.join(volumes, 'Macintosh HD'));
     write('Backups.backupdb/x', 10, path.join(volumes, 'Backup TM'));
     write('System/Library/CoreServices/SystemVersion.plist', 10, path.join(volumes, 'Vecchio Mac'));
-    const disks = await listDisks({ volumesDir: volumes, home });
+    const disks = await listDisks({ volumesDir: volumes, home, mounts: [] });
     assert.deepStrictEqual(
       disks.map((d) => [d.name, d.kind, d.disabled || null]),
       [
@@ -204,6 +204,31 @@ const dev = (p) => fs.lstatSync(p).dev;
         ['Vecchio Mac', 'external', 'Contiene un’installazione di macOS'],
       ]
     );
+
+    // Disk Drill: disco virtuale di sola lettura, anche fuori da /Volumes e senza capacità dichiarata
+    const { parseMount } = require('./disks.cjs');
+    const dd = path.join(root, 'mnt', 'Recoverable');
+    write('Rossi/2025/Spot/v1.prproj', 10, dd);
+    const mounts = parseMount(
+      [
+        '/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)',
+        '/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse)',
+        `localhost:/Recoverable on ${dd} (nfs, nodev, nosuid, read-only, mounted by utente)`,
+      ].join('\n')
+    );
+    assert.deepStrictEqual(mounts[2], { source: 'localhost:/Recoverable', point: dd, type: 'nfs', readOnly: true });
+    const withDD = await listDisks({ volumesDir: volumes, home, mounts });
+    const rec = withDD.find((d) => d.name === 'Recoverable');
+    assert.ok(rec, 'il disco di Disk Drill compare nell’elenco');
+    assert.strictEqual(rec.readOnly, true);
+    assert.strictEqual(rec.note, 'Disk Drill');
+    assert.strictEqual(rec.disabled, 'Disco di sola lettura', 'non si pulisce, ma si può leggere');
+    assert.strictEqual(withDD.length, disks.length + 1, 'niente dischi di sistema in più');
+    {
+      const T = require('./transfer.cjs');
+      const r = await T.readTree(rec.root);
+      assert.strictEqual(T.detectLevels(r.tree).levels[0].examples[0], 'Rossi');
+    }
 
     const sys = disks[0];
     const folders = await listFolders(sys, { excluded: excl, home });

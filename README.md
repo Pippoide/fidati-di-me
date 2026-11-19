@@ -149,7 +149,7 @@ Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta
 
 Dalla scheda **Trasferimento ordinato** in alto copi i progetti da un disco (o cartella) di partenza a uno di arrivo, mettendo ognuno al suo posto nella gerarchia che c'è già all'arrivo. **È solo una copia**: la partenza non viene spostata né modificata, e un file che esiste già all'arrivo non viene mai sovrascritto.
 
-1. **Partenza e arrivo**: scegli un disco collegato o una cartella qualsiasi per ciascuno.
+1. **Partenza e arrivo**: scegli un disco collegato o una cartella qualsiasi per ciascuno. Come partenza va bene anche un disco di **sola lettura**, compresi i dischi virtuali di **Disk Drill** (*Mount found items as disk*, di solito chiamato `Recoverable`, o un'immagine aperta da Disk Drill): Fidati li trova anche se sono montati fuori da `/Volumes` e li segna con l'etichetta *Disk Drill · sola lettura*. Al primo accesso macOS può chiedere il permesso di leggere un "volume di rete" o un "volume rimovibile": rispondi **Consenti**. Come arrivo servono invece un disco o una cartella scrivibili.
 2. **Struttura**: Fidati legge le cartelle e propone la gerarchia, ad esempio `Cliente / Anno / Progetto / Sottoprogetto`, con gli esempi trovati a ogni livello. Riconosce gli anni (`2024`, `2025`…) e capisce dove inizia il contenuto (cartelle come `Assets`, `Export`, `Links` o che contengono file `.prproj`, `.aep`, `.psd`, `.ai`, `.indd`…). Correggi le etichette o il numero di livelli e **conferma l'ordine**.
 3. **Piano**: scende livello per livello. Se la cartella esiste già all'arrivo ci entra; la prima che non esiste viene copiata lì dentro, intera. Se esiste anche l'ultimo livello, aggiunge solo i file mancanti. Esempio:
 

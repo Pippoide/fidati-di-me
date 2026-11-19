@@ -22,6 +22,41 @@ async function listDir(dir) {
 
 const exists = (p) => fsp.access(p).then(() => true, () => false);
 
+/**
+ * Tutti i file system montati, letti da `mount`. Serve per i dischi virtuali
+ * (Disk Drill "Monta come disco", immagini aperte da Disk Drill, NFS/FUSE…) che
+ * possono stare anche fuori da /Volumes.
+ * → [{ source, point, type, readOnly }]
+ */
+function parseMount(text) {
+  const out = [];
+  for (const line of String(text).split('\n')) {
+    const m = line.match(/^(.+?) on (\/.*) \(([^,)]+)(.*)\)\s*$/);
+    if (!m) continue;
+    out.push({ source: m[1], point: m[2], type: m[3].trim().toLowerCase(), readOnly: /\bread-only\b|\brdonly\b/.test(m[4]) });
+  }
+  return out;
+}
+
+function readMounts() {
+  return new Promise((resolve) => {
+    require('child_process').execFile('/sbin/mount', [], { timeout: 4000 }, (err, stdout) => resolve(err ? [] : parseMount(stdout)));
+  });
+}
+
+/** punti di montaggio di sistema che non sono dischi da mostrare */
+const SYSTEM_MOUNT = /^\/(System\/Volumes|dev|private\/var\/vm|Library\/Developer|private\/var\/folders|nix)(\/|$)/;
+const LOCAL_TYPES = new Set(['apfs', 'hfs', 'msdos', 'exfat', 'ntfs', 'ufsd_ntfs', 'tuxera_ntfs', 'udf', 'cd9660']);
+
+/** etichetta per i dischi non "normali" */
+function mountNote(mnt, name) {
+  if (!mnt) return null;
+  if (/disk ?drill|cleverfiles|recoverable|kfs/i.test(`${mnt.source} ${mnt.type} ${name}`)) return 'Disk Drill';
+  if (/fuse/i.test(mnt.type)) return 'Disco virtuale';
+  if (!LOCAL_TYPES.has(mnt.type) && !/^\/dev\//.test(mnt.source)) return 'Disco virtuale';
+  return null;
+}
+
 async function capacity(p) {
   try {
     const s = await fsp.statfs(p);
@@ -31,14 +66,15 @@ async function capacity(p) {
   }
 }
 
-/** motivo per cui un disco esterno non si può analizzare, o null */
-async function whyNot(root) {
+/** motivo per cui un disco esterno non si può pulire, o null (leggere e copiare si può comunque) */
+async function whyNot(root, readOnly) {
   if ((await exists(path.join(root, 'Backups.backupdb'))) || (await exists(path.join(root, '.timemachine')))) {
     return 'Disco di backup Time Machine';
   }
   if (await exists(path.join(root, 'System', 'Library', 'CoreServices', 'SystemVersion.plist'))) {
     return 'Contiene un’installazione di macOS';
   }
+  if (readOnly) return 'Disco di sola lettura';
   try {
     await fsp.access(root, fs.constants.W_OK);
   } catch {
@@ -48,32 +84,61 @@ async function whyNot(root) {
 }
 
 /**
- * Il disco di sistema (si analizza la cartella Inizio) + i dischi in /Volumes.
- * → [{ id, name, kind: 'system'|'external', root, total, free, disabled? }]
+ * Il disco di sistema (si analizza la cartella Inizio) + i dischi in /Volumes
+ * + gli altri file system montati altrove (dischi virtuali come quelli di Disk Drill).
+ * → [{ id, name, kind: 'system'|'external', root, total, free, readOnly, note?, disabled? }]
+ *   disabled = non si può pulire; per leggere (partenza del trasferimento) va bene lo stesso.
  */
-async function listDisks({ volumesDir = '/Volumes', home = os.homedir() } = {}) {
+async function listDisks({ volumesDir = '/Volumes', home = os.homedir(), mounts } = {}) {
   let systemName = 'Macintosh HD';
   const others = [];
-  for (const e of await listDir(volumesDir)) {
-    if (e.name.startsWith('.')) continue;
+  const seen = new Set();
+  if (!mounts) mounts = await readMounts();
+  const mountAt = new Map(mounts.map((m) => [m.point, m]));
+
+  const add = async (name, p) => {
     let real;
     try {
-      real = await fsp.realpath(path.join(volumesDir, e.name));
+      real = await fsp.realpath(p);
     } catch {
-      continue;
+      return;
     }
     if (real === '/') {
-      systemName = e.name; // /Volumes/Macintosh HD → /
-      continue;
+      systemName = name; // /Volumes/Macintosh HD → /
+      return;
     }
+    if (seen.has(real)) return;
     try {
-      if (!(await fsp.stat(real)).isDirectory()) continue;
+      if (!(await fsp.stat(real)).isDirectory()) return;
     } catch {
-      continue;
+      return;
     }
+    const mnt = mountAt.get(p) || mountAt.get(real);
+    const note = mountNote(mnt, name);
     const cap = await capacity(real);
-    if (!cap.total) continue;
-    others.push({ id: real, name: e.name, kind: 'external', root: real, ...cap, disabled: await whyNot(real) });
+    // i dischi virtuali spesso non dichiarano la capacità: si tengono lo stesso
+    if (!cap.total && !mnt) return;
+    seen.add(real);
+    const readOnly = !!mnt?.readOnly;
+    others.push({
+      id: real,
+      name,
+      kind: 'external',
+      root: real,
+      ...cap,
+      readOnly,
+      note,
+      disabled: await whyNot(real, readOnly),
+    });
+  };
+
+  for (const e of await listDir(volumesDir)) {
+    if (!e.name.startsWith('.')) await add(e.name, path.join(volumesDir, e.name));
+  }
+  for (const m of mounts) {
+    if (m.point === '/' || SYSTEM_MOUNT.test(m.point) || m.point.startsWith(volumesDir + '/')) continue;
+    if (m.type === 'devfs' || m.type === 'autofs' || m.type === 'nullfs') continue;
+    await add(path.basename(m.point) || m.point, m.point);
   }
   others.sort((a, b) => a.name.localeCompare(b.name, 'it'));
   return [{ id: 'system', name: systemName, kind: 'system', root: home, ...(await capacity(home)) }, ...others];
@@ -142,4 +207,4 @@ function onDisk(p, disk, home = os.homedir()) {
   return path.isAbsolute(p) && path.resolve(p) === p && inside(p, root) && p !== root;
 }
 
-module.exports = { listDisks, listFolders, cloudRoots, onDisk, capacity, inside };
+module.exports = { listDisks, listFolders, cloudRoots, onDisk, capacity, inside, parseMount };
