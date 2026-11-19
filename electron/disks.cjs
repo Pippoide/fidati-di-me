@@ -45,7 +45,9 @@ function readMounts() {
 }
 
 /** punti di montaggio di sistema che non sono dischi da mostrare */
-const SYSTEM_MOUNT = /^\/(System\/Volumes|dev|private\/var\/vm|Library\/Developer|private\/var\/folders|nix)(\/|$)/;
+// (le cartelle temporanee /private/var/folders restano: Disk Drill può montare lì i suoi dischi;
+//  si saltano solo le copie "AppTranslocation" che macOS crea all'avvio delle app scaricate)
+const SYSTEM_MOUNT = /^\/(System\/Volumes|dev|private\/var\/vm|Library\/Developer|nix)(\/|$)|\/AppTranslocation\//;
 const LOCAL_TYPES = new Set(['apfs', 'hfs', 'msdos', 'exfat', 'ntfs', 'ufsd_ntfs', 'tuxera_ntfs', 'udf', 'cd9660']);
 
 /** etichetta per i dischi non "normali" */
