@@ -209,4 +209,91 @@ function onDisk(p, disk, home = os.homedir()) {
   return path.isAbsolute(p) && path.resolve(p) === p && inside(p, root) && p !== root;
 }
 
-module.exports = { listDisks, listFolders, cloudRoots, onDisk, capacity, inside, parseMount };
+// ── dischi collegati ma non aperti da macOS ─────────────────────────────────
+// Un disco che il Finder non mostra non è "montato": macOS non è riuscito ad
+// aprirne il file system (formato non supportato, es. Linux ext4, o danneggiato).
+// Disk Drill lo legge lo stesso perché scansiona i settori grezzi con un motore
+// suo; Fidati può solo provare a farlo aprire a macOS in sola lettura, oppure
+// usare il disco virtuale che Disk Drill monta con i risultati della scansione.
+
+const SKIP_CONTENT = new Set([
+  'EFI', 'Apple_Boot', 'Microsoft Reserved', 'Apple_APFS', 'Apple_APFS_ISC', 'Apple_APFS_Recovery',
+  'Apple_KernelCoreDump', 'Apple_partition_map', 'Apple_Free', 'Apple_Driver_ATAPI', 'Apple_Driver43',
+  '7C3457EF-0000-11AA-AA11-00306543ECAC', '69646961-6700-11AA-AA11-00306543ECAC',
+  '52637672-7900-11AA-AA11-00306543ECAC', 'E3C9E316-0B5C-4DB8-817D-F92DF00215AE',
+]);
+const APFS_SYSTEM = /^(Preboot|Recovery|VM|Update|xART|Hardware|iSCPreboot)$/i;
+
+/** che formato è, in parole semplici, e se macOS lo sa aprire da solo */
+function describeFormat(content = '') {
+  const c = String(content);
+  if (/apfs|41504653-0000-11AA/i.test(c)) return { format: 'APFS', supported: true };
+  if (/Apple_HFS|48465300-0000-11AA/i.test(c)) return { format: 'Mac OS esteso (HFS+)', supported: true };
+  if (/NTFS|Microsoft Basic Data|EBD0A0A2-B9E5-4433/i.test(c)) return { format: 'Windows (NTFS, exFAT o FAT)', supported: true };
+  if (/FAT|DOS/i.test(c)) return { format: 'FAT / exFAT', supported: true };
+  if (/Linux|0FC63DAF-8483-4772/i.test(c)) return { format: 'Linux (ext4 o simili)', supported: false };
+  if (!c || c === 'GUID_partition_scheme' || c === 'FDisk_partition_scheme') return { format: 'Sconosciuto', supported: false };
+  return { format: c, supported: false };
+}
+
+/**
+ * Dall'output di `diskutil list -plist external` (convertito in JSON) ai volumi
+ * che esistono ma non sono montati.
+ * → [{ id: 'disk4s2', disk: 'disk4', name, size, format, supported }]
+ */
+function parseUnmounted(info) {
+  const out = [];
+  const seen = new Set();
+  const push = (v, disk, content) => {
+    const id = v.DeviceIdentifier;
+    if (!id || seen.has(id) || v.MountPoint) return;
+    if (SKIP_CONTENT.has(content) || APFS_SYSTEM.test(v.VolumeName || '')) return;
+    seen.add(id);
+    out.push({ id, disk, name: v.VolumeName || `Volume ${id}`, size: Number(v.Size) || 0, ...describeFormat(content) });
+  };
+  for (const d of info?.AllDisksAndPartitions || []) {
+    const disk = d.DeviceIdentifier;
+    const parts = d.Partitions || [];
+    const apfs = d.APFSVolumes || [];
+    for (const p of parts) push(p, disk, p.Content);
+    for (const v of apfs) push(v, disk, 'APFS');
+    // disco senza partizioni (formattato "intero") o con la tabella illeggibile
+    if (!parts.length && !apfs.length && !d.MountPoint && !(d.APFSPhysicalStores || []).length) {
+      push({ ...d, VolumeName: d.VolumeName || `Disco ${disk}` }, disk, d.Content);
+    }
+  }
+  return out;
+}
+
+function sh(cmd, args, timeout = 15000) {
+  return new Promise((resolve, reject) =>
+    require('child_process').execFile(cmd, args, { timeout, maxBuffer: 8 << 20 }, (err, stdout, stderr) =>
+      err ? reject(Object.assign(err, { stderr: String(stderr || '') })) : resolve(String(stdout))
+    )
+  );
+}
+
+async function listUnmounted() {
+  if (process.platform !== 'darwin') return [];
+  try {
+    const json = await sh('/bin/sh', ['-c', '/usr/sbin/diskutil list -plist external | /usr/bin/plutil -convert json -o - -']);
+    return parseUnmounted(JSON.parse(json));
+  } catch {
+    return [];
+  }
+}
+
+/** chiede a macOS di aprire il volume in SOLA LETTURA (non scrive nulla sul disco) */
+async function mountReadOnly(id) {
+  if (!/^disk\d+(s\d+)*$/.test(id)) throw new Error('Disco non valido');
+  const known = await listUnmounted();
+  if (!known.some((v) => v.id === id)) throw new Error('Il disco non è più tra quelli da aprire: aggiorna l’elenco');
+  try {
+    await sh('/usr/sbin/diskutil', ['mount', 'readOnly', id], 60000);
+  } catch (e) {
+    const msg = (e.stderr || e.message || '').trim().split('\n').pop();
+    throw new Error(`macOS non riesce ad aprire questo disco${msg ? ` (${msg})` : ''}`);
+  }
+}
+
+module.exports = { listDisks, listFolders, cloudRoots, onDisk, capacity, inside, parseMount, parseUnmounted, listUnmounted, mountReadOnly };

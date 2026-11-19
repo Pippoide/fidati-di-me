@@ -65,6 +65,10 @@ const mockDisks = [
   { id: '/Volumes/Recoverable', name: 'Recoverable', kind: 'external', root: '/Volumes/Recoverable', total: 0, free: 0, readOnly: true, note: 'Disk Drill', disabled: 'Disco di sola lettura' },
 ];
 
+const mockUnmounted = [
+  { id: 'disk4s2', disk: 'disk4', name: 'ARCHIVIO', size: 2000 * GB, format: 'Linux (ext4 o simili)', supported: false },
+];
+
 const mockFolders = {
   system: [
     ['Documenti', '/Users/tu/Documents'],
@@ -196,6 +200,13 @@ const mock = {
   isMock: true,
   async listDisks() {
     return mockDisks;
+  },
+  async listUnmounted() {
+    return mockUnmounted;
+  },
+  async mountReadOnly(id) {
+    await wait(700);
+    throw new Error(`macOS non riesce ad aprire questo disco (${id}: formato non riconosciuto)`);
   },
   async info() {
     return { name: 'Fidati BK', channel: 'bk', version: 'anteprima' };

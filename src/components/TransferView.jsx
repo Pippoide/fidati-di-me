@@ -55,7 +55,7 @@ function Steps({ current }) {
 }
 
 /** scelta della cartella di partenza o di arrivo */
-function PickCard({ title, hint, which, value, disks, locked, onPick }) {
+function PickCard({ title, hint, which, value, disks, locked, onPick, children }) {
   return (
     <div className="rounded-xl border border-line bg-panel p-4">
       <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h3>
@@ -88,6 +88,86 @@ function PickCard({ title, hint, which, value, disks, locked, onPick }) {
           Scegli cartella…
         </button>
       </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Dischi collegati che il Finder non mostra (macOS non li ha aperti).
+ * Si prova ad aprirli in sola lettura; se non va, la strada è Disk Drill.
+ */
+function UnmountedDisks({ list, locked, onMounted, onRefresh }) {
+  const [busy, setBusy] = useState(null);
+  const [failed, setFailed] = useState({}); // id → messaggio
+  const [help, setHelp] = useState(false);
+
+  const mount = async (v) => {
+    setBusy(v.id);
+    try {
+      await api.mountReadOnly(v.id);
+      setFailed((f) => ({ ...f, [v.id]: null }));
+      await onMounted();
+    } catch (e) {
+      setFailed((f) => ({ ...f, [v.id]: errorText(e) }));
+      setHelp(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      {list.length > 0 && (
+        <>
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-caution">Collegati ma non aperti da macOS</h4>
+          <ul className="mt-2 space-y-2">
+            {list.map((v) => (
+              <li key={v.id} className="rounded-lg border border-caution/30 bg-caution/5 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[13px] font-medium">{v.name}</span>
+                  <span className="text-[11px] text-muted">
+                    {v.id} · {v.format}
+                    {v.size ? ` · ${formatBytes(v.size)}` : ''}
+                  </span>
+                  <button className={`${btn} ml-auto flex-none`} disabled={locked || !!busy} onClick={() => mount(v)}>
+                    {busy === v.id ? 'Apro…' : 'Apri in sola lettura'}
+                  </button>
+                </div>
+                {!v.supported && !failed[v.id] && (
+                  <p className="mt-1 text-[12px] text-muted">macOS di solito non legge questo formato: se non si apre, usa Disk Drill (vedi sotto).</p>
+                )}
+                {failed[v.id] && <p className="mt-1 text-[12px] text-protected">{failed[v.id]}</p>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <button className="mt-2 text-[12px] text-muted underline-offset-2 hover:text-text hover:underline" onClick={() => setHelp((h) => !h)}>
+        Il disco si legge solo con Disk Drill?
+      </button>
+      {help && (
+        <div className="mt-2 rounded-lg bg-raised px-3 py-2 text-[12px] leading-relaxed text-muted">
+          <p>
+            Disk Drill legge il disco con un suo motore di recupero, senza che macOS lo apra: per questo il Finder (e Fidati) non lo
+            vedono. Fidati può copiare da Disk Drill così:
+          </p>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+            <li>In Disk Drill seleziona il disco e avvia <span className="text-text">Cerca dati persi</span>, fino alla fine della scansione.</li>
+            <li>
+              Nei risultati scegli <span className="text-text">Monta gli elementi trovati come disco</span> (“Mount found items as disk”, funzione di Disk Drill PRO).
+            </li>
+            <li>Compare un disco di sola lettura, di solito “Recoverable”: torna qui e premi <span className="text-text">Aggiorna</span>, poi sceglilo come partenza.</li>
+          </ol>
+          <p className="mt-1">
+            Se il disco ha problemi fisici (rumori, scollegamenti), conviene prima farne un backup “byte per byte” con Disk Drill e lavorare
+            sull’immagine.
+          </p>
+        </div>
+      )}
+      <button className={`${btn} mt-2 block`} disabled={locked} onClick={onRefresh}>
+        Aggiorna
+      </button>
     </div>
   );
 }
@@ -202,7 +282,23 @@ function EntryRow({ e, srcName, destName, locked, onToggle, onChoose, onSuggesti
   );
 }
 
-export default function TransferView({ disks }) {
+export default function TransferView({ disks, onRefreshDisks = async () => {} }) {
+  const [unmounted, setUnmounted] = useState([]);
+  const refreshUnmounted = async () => {
+    try {
+      setUnmounted((await api.listUnmounted?.()) || []);
+    } catch {
+      setUnmounted([]);
+    }
+  };
+  useEffect(() => {
+    refreshUnmounted();
+    window.addEventListener('focus', refreshUnmounted);
+    return () => window.removeEventListener('focus', refreshUnmounted);
+  }, []);
+  const refreshAll = async () => {
+    await Promise.all([onRefreshDisks(), refreshUnmounted()]);
+  };
   const [step, setStep] = useState(0);
   const [src, setSrc] = useState(null);
   const [dest, setDest] = useState(null);
@@ -369,7 +465,9 @@ export default function TransferView({ disks }) {
       {/* ── 1 ── */}
       <section className="grid gap-3 md:grid-cols-2">
         <PickCard title="Partenza" which="src" value={src} disks={disks} locked={locked} onPick={pick}
-          hint="Il disco o la cartella da cui copiare. Non viene modificata: va bene anche un disco di sola lettura, come quelli montati da Disk Drill." />
+          hint="Il disco o la cartella da cui copiare. Non viene modificata: va bene anche un disco di sola lettura, come quelli montati da Disk Drill.">
+          <UnmountedDisks list={unmounted} locked={locked} onMounted={refreshAll} onRefresh={refreshAll} />
+        </PickCard>
         <PickCard title="Arrivo" which="dest" value={dest} disks={disks} locked={locked} onPick={pick}
           hint="Il disco o la cartella in cui sistemare i progetti." />
       </section>

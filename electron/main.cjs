@@ -4,7 +4,7 @@ const path = require('path');
 const fsp = require('fs').promises;
 const os = require('os');
 const { scan, removeItem, runningAdobeApps } = require('./scanner.cjs');
-const { listDisks, listFolders, cloudRoots, onDisk, capacity } = require('./disks.cjs');
+const { listDisks, listFolders, cloudRoots, onDisk, capacity, listUnmounted, mountReadOnly } = require('./disks.cjs');
 const updater = require('./updater.cjs');
 const T = require('./transfer.cjs');
 
@@ -74,6 +74,8 @@ async function findDisk(diskId) {
 const send = (channel, payload) => win && !win.isDestroyed() && win.webContents.send(channel, payload);
 
 ipcMain.handle('fidati:disks', () => listDisks());
+ipcMain.handle('fidati:unmounted', () => listUnmounted());
+ipcMain.handle('fidati:mount-readonly', (_e, id) => mountReadOnly(String(id)));
 ipcMain.handle('fidati:info', () => ({ name: APP_NAME, channel: updater.CHANNEL, version: app.getVersion() }));
 
 ipcMain.handle('fidati:folders', async (_e, diskId) =>

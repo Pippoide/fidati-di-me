@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('fidati', {
   listDisks: () => ipcRenderer.invoke('fidati:disks'),
   info: () => ipcRenderer.invoke('fidati:info'),
+  listUnmounted: () => ipcRenderer.invoke('fidati:unmounted'),
+  mountReadOnly: (id) => ipcRenderer.invoke('fidati:mount-readonly', id),
   listFolders: (diskId) => ipcRenderer.invoke('fidati:folders', diskId),
   setExcluded: (diskId, folder, excluded) => ipcRenderer.invoke('fidati:set-excluded', diskId, folder, excluded),
   pickExcluded: (diskId) => ipcRenderer.invoke('fidati:pick-excluded', diskId),

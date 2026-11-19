@@ -230,6 +230,42 @@ const dev = (p) => fs.lstatSync(p).dev;
       assert.strictEqual(T.detectLevels(r.tree).levels[0].examples[0], 'Rossi');
     }
 
+    // dischi collegati ma non aperti da macOS (diskutil list -plist external)
+    const { parseUnmounted } = require('./disks.cjs');
+    const un = parseUnmounted({
+      AllDisksAndPartitions: [
+        {
+          DeviceIdentifier: 'disk4', Content: 'GUID_partition_scheme', Size: 2e12,
+          Partitions: [
+            { DeviceIdentifier: 'disk4s1', Content: 'EFI', VolumeName: 'EFI', Size: 2e8 },
+            { DeviceIdentifier: 'disk4s2', Content: 'Linux Filesystem', Size: 1.9e12 },
+          ],
+        },
+        {
+          DeviceIdentifier: 'disk5', Content: 'GUID_partition_scheme', Size: 1e12,
+          Partitions: [{ DeviceIdentifier: 'disk5s2', Content: 'Microsoft Basic Data', VolumeName: 'LAVORI', Size: 1e12, MountPoint: '/Volumes/LAVORI' }],
+        },
+        {
+          DeviceIdentifier: 'disk7', Content: 'EF57347C-0000-11AA-AA11-00306543ECAC', Size: 5e11,
+          APFSPhysicalStores: [{ DeviceIdentifier: 'disk6s2' }],
+          APFSVolumes: [
+            { DeviceIdentifier: 'disk7s1', VolumeName: 'Progetti', Size: 5e11 },
+            { DeviceIdentifier: 'disk7s2', VolumeName: 'Preboot', Size: 1e9 },
+          ],
+        },
+        { DeviceIdentifier: 'disk8', Content: '', Size: 5e11 },
+      ],
+    });
+    assert.deepStrictEqual(
+      un.map((v) => [v.id, v.name, v.format, v.supported]),
+      [
+        ['disk4s2', 'Volume disk4s2', 'Linux (ext4 o simili)', false],
+        ['disk7s1', 'Progetti', 'APFS', true],
+        ['disk8', 'Disco disk8', 'Sconosciuto', false],
+      ]
+    );
+    await assert.rejects(require('./disks.cjs').mountReadOnly('disk4s2; rm -rf /'), /non valido/);
+
     const sys = disks[0];
     const folders = await listFolders(sys, { excluded: excl, home });
     const byName = Object.fromEntries(folders.map((f) => [f.name, f]));

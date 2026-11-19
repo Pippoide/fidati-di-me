@@ -309,7 +309,7 @@ export default function App() {
 
       <main className={`min-h-0 flex-1 overflow-y-auto px-8 py-6 ${mode === 'transfer' ? '' : 'hidden'}`}>
         {mode === 'transfer' && <UpdateBanner />}
-        <TransferView disks={disks} />
+        <TransferView disks={disks} onRefreshDisks={refreshDisks} />
       </main>
 
       <div className={`flex min-h-0 flex-1 ${mode === 'clean' ? '' : 'hidden'}`}>
