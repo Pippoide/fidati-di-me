@@ -15,6 +15,10 @@ const LEVELS = [
 
 export default function App() {
   const [mode, setMode] = useState('clean'); // clean | transfer
+  const [info, setInfo] = useState(null); // { name, channel, version }
+  useEffect(() => {
+    api.info?.().then(setInfo).catch(() => {});
+  }, []);
   const [phase, setPhase] = useState('idle'); // idle | scanning | ready
   const [progress, setProgress] = useState({ scanned: 0, current: '' });
   const [groups, setGroups] = useState([]);
@@ -244,7 +248,14 @@ export default function App() {
       <header className="drag flex items-end justify-between gap-6 border-b border-line px-8 pb-5 pt-10">
         <div className="min-w-0">
           <div className="flex items-center gap-4">
-            <h1 className="font-display text-3xl font-bold tracking-tight">Fidati</h1>
+            <h1 className="font-display text-3xl font-bold tracking-tight">
+              Fidati
+              {info?.channel === 'bk' && (
+                <span className="ml-2 rounded-md border border-caution/50 px-1.5 py-0.5 align-middle text-[11px] font-semibold tracking-wider text-caution">
+                  BK
+                </span>
+              )}
+            </h1>
             <div role="tablist" aria-label="Funzione" className="no-drag flex rounded-lg border border-line p-0.5 text-[12px]">
               {[
                 ['clean', 'Pulizia'],

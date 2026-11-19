@@ -9,7 +9,9 @@ const updater = require('./updater.cjs');
 const T = require('./transfer.cjs');
 
 const DEV = process.env.FIDATI_DEV === '1';
-app.setName('Fidati');
+// "Fidati" o "Fidati BK": nomi diversi → impostazioni e registri separati, le due app convivono
+const APP_NAME = require('../package.json').productName || 'Fidati';
+app.setName(APP_NAME);
 
 let win;
 let registry = new Map(); // id → voce dell'ultima analisi; il renderer non manda mai percorsi
@@ -22,7 +24,7 @@ function createWindow() {
     height: 780,
     minWidth: 760,
     minHeight: 560,
-    title: 'Fidati',
+    title: APP_NAME,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0c0c0e',
     webPreferences: {
@@ -72,6 +74,7 @@ async function findDisk(diskId) {
 const send = (channel, payload) => win && !win.isDestroyed() && win.webContents.send(channel, payload);
 
 ipcMain.handle('fidati:disks', () => listDisks());
+ipcMain.handle('fidati:info', () => ({ name: APP_NAME, channel: updater.CHANNEL, version: app.getVersion() }));
 
 ipcMain.handle('fidati:folders', async (_e, diskId) =>
   listFolders(await findDisk(diskId), { excluded: (await getSettings()).excluded })

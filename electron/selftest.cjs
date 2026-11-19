@@ -241,6 +241,18 @@ const dev = (p) => fs.lstatSync(p).dev;
     assert.strictEqual((await check({ current: '1.0.4', arch: 'arm64', fetchImpl: fake({ tag_name: 'v1.0.5', assets, html_url: 'x' }) })).latest, '1.0.5');
     assert.strictEqual((await check({ current: '1.0.5', arch: 'arm64', fetchImpl: fake({ tag_name: 'v1.0.5', assets }) })).latest, undefined);
     assert.strictEqual((await check({ current: '1.0.0', fetchImpl: fake({}, 404) })).latest, undefined);
+    // due varianti: Fidati segue solo le release normali, Fidati BK solo quelle -bk
+    const bkBase = 'https://github.com/Pippoide/fidati-di-me/releases/download/v1.0.9-bk/';
+    const bkAssets = [{ name: 'Fidati-BK-1.0.9-arm64.zip', browser_download_url: bkBase + 'Fidati-BK-1.0.9-arm64.zip' }];
+    assert.strictEqual(pickAsset([...assets, ...bkAssets], 'arm64', 'bk').name, 'Fidati-BK-1.0.9-arm64.zip');
+    assert.strictEqual(pickAsset(bkAssets, 'arm64'), undefined, 'Fidati non installa mai lo zip BK');
+    const list = [
+      { tag_name: 'v1.0.10', assets },
+      { tag_name: 'v1.0.9-bk', assets: bkAssets, html_url: 'bk' },
+    ];
+    assert.strictEqual((await check({ current: '1.0.4', arch: 'arm64', channel: 'bk', fetchImpl: fake(list) })).latest, '1.0.9');
+    assert.strictEqual((await check({ current: '1.0.9', arch: 'arm64', channel: 'bk', fetchImpl: fake(list) })).latest, undefined);
+    assert.strictEqual((await check({ current: '1.0.4', arch: 'arm64', fetchImpl: fake({ tag_name: 'v1.0.9-bk', assets: bkAssets }) })).latest, undefined);
   }
 
   // ── 8. trasferimento ordinato: l'esempio HD A → HD B ─────────────────────

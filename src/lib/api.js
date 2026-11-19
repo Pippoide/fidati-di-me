@@ -196,6 +196,9 @@ const mock = {
   async listDisks() {
     return mockDisks;
   },
+  async info() {
+    return { name: 'Fidati BK', channel: 'bk', version: 'anteprima' };
+  },
   async listFolders(diskId) {
     return foldersOf(diskId);
   },

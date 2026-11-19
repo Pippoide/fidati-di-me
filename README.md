@@ -13,6 +13,15 @@ Gira in una finestra sua, non nel browser, e si aggiorna da sola tramite GitHub.
 3. Al primo avvio macOS la blocca, perché l'app non ha un certificato Apple a pagamento: vai in *Impostazioni di Sistema → Privacy e sicurezza* e premi **Apri comunque**. Si fa una volta sola.
 4. Per un'analisi completa: *Privacy e sicurezza → Accesso completo al disco* → attiva **Fidati**.
 
+### Due varianti: Fidati e Fidati BK
+
+Nelle [Releases](https://github.com/Pippoide/fidati-di-me/releases) trovi due app:
+
+- **Fidati** (release `v1.0.N`, dal branch `build`): la versione principale.
+- **Fidati BK** (release `v1.0.N-bk`, marcate *Pre-release*, dal branch `Build_BK`): la seconda variante, con in più il **Trasferimento ordinato**. File `Fidati-BK-….dmg`.
+
+Sono due app separate (nome e identificativo diversi): puoi installarle entrambe in **Applicazioni**. Ognuna ha le sue impostazioni e si aggiorna solo con le proprie release. Nell'intestazione di Fidati BK compare l'etichetta **BK**.
+
 ### Aggiornamenti
 
 All'avvio Fidati controlla se su GitHub c'è una versione più nuova. Se c'è, compare un avviso con il pulsante **Aggiorna e riavvia**: l'app scarica la nuova versione, sostituisce sé stessa e si riapre.
@@ -28,7 +37,8 @@ All'avvio Fidati controlla se su GitHub c'è una versione più nuova. Se c'è, c
 | --- | --- |
 | `dev` | Dove si lavora. I push qui non producono nulla. |
 | `build` | Rilascio. Ogni push qui fa partire la build su GitHub. |
-| `Build_BK` | Build di prova con il **Trasferimento ordinato**. Ogni push pubblica una *pre-release* `v1.0.N-bk`: si installa a mano dal `.dmg` e non viene proposta dall'aggiornamento automatico. |
+| `Dev_BK` | Dove si lavora sulla variante **Fidati BK**. I push qui non producono nulla. |
+| `Build_BK` | Rilascio di **Fidati BK**. Ogni push pubblica una release `v1.0.N-bk`. |
 
 Quando `dev` è pronto, portalo in `build` (pull request `dev → build` su GitHub, oppure `git checkout build && git merge dev && git push`). GitHub Actions (`.github/workflows/build.yml`) allora:
 

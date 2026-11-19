@@ -1,7 +1,7 @@
 # A ogni push sul branch "build": compila Fidati.app su un Mac di GitHub
 # e pubblica una nuova release (dmg per installare, zip per l'updater interno).
-# Sul branch "Build_BK" fa lo stesso ma come pre-release di prova: non arriva
-# a chi usa l'app tramite l'aggiornamento automatico.
+# Sul branch "Build_BK" compila la seconda variante, "Fidati BK": app separata,
+# release marcata pre-release (così /releases/latest resta quella di Fidati).
 name: Build Fidati
 
 on:
@@ -39,6 +39,16 @@ jobs:
       - name: Imposta la versione ${{ env.VERSION }}
         run: npm version "$VERSION" --no-git-tag-version
 
+      # Fidati BK: nome, identificativo e canale di aggiornamento propri,
+      # così si installa accanto a Fidati senza sostituirla
+      - name: Variante Fidati BK
+        if: env.BK == 'true'
+        run: |
+          npm pkg set productName="Fidati BK" fidatiChannel=bk \
+            build.productName="Fidati BK" build.appId=com.pippoide.fidati.bk \
+            'build.artifactName=Fidati-BK-${version}-${arch}.${ext}'
+          cat package.json | head -5
+
       - name: Compila Fidati.app (Apple Silicon + Intel)
         run: npm run dist
         env:
@@ -52,8 +62,8 @@ jobs:
             gh release create "v$VERSION-bk" release/*.dmg release/*.zip \
               --target "$GITHUB_SHA" \
               --prerelease \
-              --title "Fidati $VERSION · Build_BK (prova)" \
-              --notes "Versione di prova dal branch Build_BK: aggiunge il **Trasferimento ordinato**. Non viene proposta dall'aggiornamento automatico. Scarica il .dmg: **arm64** per Mac con chip Apple, **x64** per Mac Intel."
+              --title "Fidati BK $VERSION" \
+              --notes "**Fidati BK**: seconda variante dell'app, dal branch Build_BK, con il **Trasferimento ordinato**. Si installa accanto a Fidati (è un'app separata) e si aggiorna da sola con le release BK. Scarica il .dmg: **arm64** per Mac con chip Apple, **x64** per Mac Intel."
           else
             gh release create "v$VERSION" release/*.dmg release/*.zip \
               --target "$GITHUB_SHA" \

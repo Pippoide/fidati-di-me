@@ -11,7 +11,18 @@ const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 
 const REPO = 'Pippoide/fidati-di-me';
-const API = `https://api.github.com/repos/${REPO}/releases/latest`;
+const API = `https://api.github.com/repos/${REPO}/releases`;
+
+/**
+ * Canale di aggiornamento: 'stable' per Fidati, 'bk' per Fidati BK (branch Build_BK).
+ * Lo imposta la build su GitHub nel package.json; ogni app segue solo le proprie release.
+ */
+let CHANNEL = 'stable';
+try {
+  CHANNEL = require('../package.json').fidatiChannel || 'stable';
+} catch {}
+const isBkTag = (tag) => /-bk$/i.test(String(tag));
+const isBkAsset = (name) => /^Fidati-BK-/i.test(name);
 const DOWNLOAD_PREFIX = `https://github.com/${REPO}/releases/download/`;
 
 /** "v1.0.12" → [1,0,12] */
@@ -30,22 +41,40 @@ function isNewer(latest, current) {
   return false;
 }
 
-/** sceglie lo zip giusto (arm64 = Apple Silicon, x64 = Intel) */
-function pickAsset(assets, arch) {
+/** sceglie lo zip giusto (arm64 = Apple Silicon, x64 = Intel) e del canale giusto */
+function pickAsset(assets, arch, channel = 'stable') {
   return (assets || []).find(
-    (a) => a.name.endsWith(`-${arch}.zip`) && String(a.browser_download_url).startsWith(DOWNLOAD_PREFIX)
+    (a) =>
+      a.name.endsWith(`-${arch}.zip`) &&
+      isBkAsset(a.name) === (channel === 'bk') &&
+      String(a.browser_download_url).startsWith(DOWNLOAD_PREFIX)
   );
 }
 
-/** Ritorna { current, latest, url, size, digest, page } oppure { current } se non c'è niente di nuovo. */
-async function check({ current, arch = process.arch, fetchImpl = fetch } = {}) {
-  const res = await fetchImpl(API, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Fidati' } });
-  if (res.status === 404) return { current }; // nessuna release ancora
+/** l'ultima release del canale: stable = l'ultima "ufficiale", bk = l'ultima con tag …-bk */
+async function latestRelease(channel, fetchImpl) {
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'Fidati' };
+  if (channel === 'bk') {
+    const res = await fetchImpl(`${API}?per_page=30`, { headers });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GitHub ha risposto ${res.status}`);
+    const list = await res.json();
+    return (Array.isArray(list) ? list : []).find((r) => !r.draft && isBkTag(r.tag_name)) || null;
+  }
+  const res = await fetchImpl(`${API}/latest`, { headers });
+  if (res.status === 404) return null; // nessuna release ancora
   if (!res.ok) throw new Error(`GitHub ha risposto ${res.status}`);
   const rel = await res.json();
-  const latest = String(rel.tag_name || '').replace(/^v/, '');
+  return isBkTag(rel.tag_name) ? null : rel;
+}
+
+/** Ritorna { current, latest, url, size, digest, page } oppure { current } se non c'è niente di nuovo. */
+async function check({ current, arch = process.arch, fetchImpl = fetch, channel = CHANNEL } = {}) {
+  const rel = await latestRelease(channel, fetchImpl);
+  if (!rel) return { current };
+  const latest = String(rel.tag_name || '').replace(/^v/, '').replace(/-bk$/i, '');
   if (!latest || !isNewer(latest, current)) return { current };
-  const asset = pickAsset(rel.assets, arch);
+  const asset = pickAsset(rel.assets, arch, channel);
   if (!asset) return { current };
   return {
     current,
@@ -138,4 +167,4 @@ async function prepare(update, { tmpDir, onProgress = () => {}, fetchImpl = fetc
   };
 }
 
-module.exports = { check, prepare, isNewer, pickAsset, REPO };
+module.exports = { check, prepare, isNewer, pickAsset, REPO, CHANNEL };
