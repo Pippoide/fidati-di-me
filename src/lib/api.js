@@ -87,6 +87,43 @@ const foldersOf = (diskId) =>
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let progressCb = () => {};
+let orgProgressCb = () => {};
+
+// ── Riorganizza e Cronologia: dati di esempio ──
+const SUB = { work: '02_Lavorazione', images: '01_Asset/Immagini', logos: '01_Asset/Loghi', digital: '03_Export/Digitale', print: '03_Export/Stampa', brief: '00_Brief', archive: '99_Archivio', other: '01_Asset/Altro' };
+const mockClusterData = [
+  { id: 'c1', client: 'Il Bivio', project: 'Totebag', confidence: 100, reasons: ['File collegati fra loro (InDesign, Illustrator, After Effects, Premiere)', 'Cartella di progetto “Totebag”', 'Cliente dalla cartella “Il Bivio”'],
+    files: [['totebag_v2.indd', 'work', true], ['foto_piccione.jpg', 'work', true], ['Links/texture-carta.png', 'work', true], ['totebag_v1.indd', 'archive'], ['brief cliente.docx', 'brief'], ['Export/totebag_def.pdf', 'print']] },
+  { id: 'c2', client: 'Arianne e Bea', project: 'Capsules', confidence: 80, reasons: ['Nomi dei file simili', 'Cliente già presente: “Arianne e Bea”', 'Progetto già presente'],
+    files: [['arianne_capsules_post1.png', 'images'], ['arianne_capsules_post2.png', 'images']] },
+  { id: 'c3', client: '', project: 'Brochure', confidence: 45, reasons: ['Cartella pacchetto (Links / Document fonts)', 'Cliente non riconosciuto'], files: [['Brochure Folder', 'work']], dir: true },
+  { id: 'c4', client: 'Bivio', project: 'Logo', confidence: 35, reasons: ['Cliente dedotto dal nome'], files: [['bivio_logo.svg', 'logos']] },
+  { id: 'c5', client: '', project: '', confidence: 0, reasons: ['Cliente non riconosciuto', 'Progetto non riconosciuto'], files: [['IMG_1234.jpg', 'images']] },
+];
+const mockPreview = (c, client = c.client, project = c.project) => ({
+  id: c.id, client, project, confidence: c.confidence, reasons: c.reasons,
+  size: c.files.length * 4.2 * MB, count: c.files.length, hasLinks: c.files.some((f) => f[2]), hasPackage: !!c.dir, error: null,
+  items: c.files.map(([rel, sub, linked]) => ({
+    from: `/Users/tu/Desktop/${rel}`, name: rel.split('/').pop(), kind: c.dir ? 'dir' : 'file', size: 4.2 * MB, sub, linked: !!linked,
+    to: client && project ? `${client}/2026-11_${project.replace(/ /g, '_')}/${SUB[sub]}/${linked ? 'Totebag_v02/' : ''}${c.dir ? rel : `${client}_${project}_${rel.split('/').pop()}`.replace(/ /g, '_')}` : null,
+    renamed: !c.dir,
+  })),
+});
+const day = 864e5;
+let mockLog = {
+  riorganizza: [
+    { id: 's1', kind: 'riorganizza', label: 'Riorganizzazione su Macintosh HD', root: '/Users/tu/Desktop', at: Date.now() - 2 * day, entries: [
+      { id: 'e1', op: 'move', from: '/Users/tu/Desktop/locandina.indd', to: '/Users/tu/Documents/Clienti/Il Bivio/2026-11_Festival/02_Lavorazione/Il_Bivio_Festival_locandina.indd', size: 12 * MB, state: 'done' },
+      { id: 'e2', op: 'move', from: '/Users/tu/Desktop/locandina.pdf', to: '/Users/tu/Documents/Clienti/Il Bivio/2026-11_Festival/03_Export/Stampa/Il_Bivio_Festival_locandina.pdf', size: 3 * MB, state: 'restored', restoredTo: '/Users/tu/Desktop/locandina.pdf' },
+    ] },
+  ],
+  pulizia: [
+    { id: 's2', kind: 'pulizia', label: 'Nel Cestino da Macintosh HD', root: '/Users/tu', at: Date.now() - day, entries: [
+      { id: 'e3', op: 'trash', from: '/Users/tu/Movies/reel-2026.mov', to: '/Users/tu/.Trash/reel-2026.mov', size: 4.8 * GB, state: 'done' },
+      { id: 'e4', op: 'trash', from: '/Users/tu/Downloads/vecchio.zip', to: null, size: 300 * MB, state: 'done' },
+    ] },
+  ],
+};
 
 const mock = {
   isMock: true,
@@ -127,6 +164,52 @@ const mock = {
   onUpdateProgress() {
     return () => {};
   },
+  async orgOptions() {
+    return { threshold: 70, rename: true, dest: '/Users/tu/Documents/Clienti' };
+  },
+  async orgSetOptions(o) {
+    return o;
+  },
+  async orgPickSource() {
+    return '/Users/tu/Desktop';
+  },
+  async orgPickDest() {
+    return '/Users/tu/Documents/Clienti';
+  },
+  async orgAnalyze(_diskId, source) {
+    for (let i = 1; i <= 8; i++) {
+      await wait(110);
+      orgProgressCb({ phase: i < 6 ? 'scan' : 'links', done: i, total: 8, current: '/Users/tu/Desktop/esempio' });
+    }
+    return { source: source || '/Users/tu', dest: '/Users/tu/Documents/Clienti', stats: { files: 11, packages: 1, linkGroups: 1, skipped: 1, truncated: false }, adobeOpen: [], clusters: mockClusterData.map((c) => mockPreview(c)) };
+  },
+  async orgPreview(id, client, project) {
+    return mockPreview(mockClusterData.find((c) => c.id === id), client, project);
+  },
+  async orgApply(jobs) {
+    await wait(700);
+    return { moved: jobs.length * 2, failed: [], applied: jobs.map((j) => j.id) };
+  },
+  orgReveal() {},
+  onOrgProgress(cb) {
+    orgProgressCb = cb;
+    return () => (orgProgressCb = () => {});
+  },
+  async logList() {
+    return mockLog;
+  },
+  async logRestore(kind, ids, force) {
+    const issues = ids.includes('e4') ? [{ id: 'e4', name: 'vecchio.zip', kind: 'error', message: 'Non è più nel Cestino (svuotato o già ripreso dal Finder)' }] : [];
+    if (issues.length && !force) return { needsConfirm: issues, results: [] };
+    await wait(400);
+    mockLog = { ...mockLog, [kind]: mockLog[kind].map((s) => ({ ...s, entries: s.entries.map((e) => (ids.includes(e.id) && e.id !== 'e4' ? { ...e, state: 'restored', restoredTo: e.from } : e)) })) };
+    return { results: ids.map((id) => ({ id, ok: id !== 'e4' })), list: mockLog[kind] };
+  },
+  async logForget(kind, sessionId) {
+    mockLog = { ...mockLog, [kind]: mockLog[kind].filter((s) => s.id !== sessionId) };
+    return mockLog[kind];
+  },
+  logReveal() {},
   onProgress(cb) {
     progressCb = cb;
     return () => (progressCb = () => {});

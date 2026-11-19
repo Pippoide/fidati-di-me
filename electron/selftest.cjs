@@ -243,6 +243,144 @@ const dev = (p) => fs.lstatSync(p).dev;
     assert.strictEqual((await check({ current: '1.0.0', fetchImpl: fake({}, 404) })).latest, undefined);
   }
 
+  // ── 8. Riorganizza: progetti, collegamenti, versioni, da smistare ───────
+  {
+    const O = require('./organizer.cjs');
+    const { Journal } = require('./journal.cjs');
+    const src = path.join(root, 'org', 'Scrivania');
+    const dest = path.join(root, 'org', 'Clienti');
+    const w = (rel, content = 'x'.repeat(100)) => {
+      const p = path.join(src, rel);
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, content);
+      return p;
+    };
+    fs.mkdirSync(path.join(dest, 'Arianne e Bea', '2025-03_Capsules'), { recursive: true });
+    w('Bivio/Totebag/foto_piccione.jpg');
+    w('Bivio/Totebag/Links/texture-carta.png');
+    // InDesign cita i collegamenti come percorso UTF-8 e come testo UTF-16
+    w(
+      'Bivio/Totebag/totebag_v2.indd',
+      'INDD /Users/x/Bivio/Totebag/foto_piccione.jpg \0' + Buffer.from('texture-carta.png', 'utf16le').toString('latin1'),
+    );
+    w('Bivio/Totebag/totebag_v1.indd', 'vuoto');
+    w('Bivio/Totebag/Export/totebag_def.pdf');
+    w('Bivio/Totebag/brief cliente.docx');
+    w('Bivio/Totebag/strano.xyz');
+    w('Brochure Folder/Brochure.indd');
+    w('Brochure Folder/Links/a.jpg');
+    w('arianne_capsules_post1.png');
+    w('arianne_capsules_post2.png');
+    w('IMG_1234.jpg');
+    w('sito/package.json', '{}');
+    w('sito/src/index.js');
+
+    const orgCtx = { kind: 'external', root: path.join(root, 'org'), home, exclude: [], cloudRoots: [], destRoot: dest };
+    const r = await O.analyze({ sources: [src], destRoot: dest, isAllowed: (p) => (O.assertMovable(p, orgCtx), true) });
+    const find = (pred) => r.clusters.find((c) => c.items.some(pred));
+    const tote = find((i) => i.name === 'totebag_v2.indd');
+    assert.strictEqual(tote.client, 'Bivio');
+    assert.strictEqual(tote.project, 'Totebag');
+    assert.ok(tote.confidence >= 70);
+    const linked = tote.items
+      .filter((i) => i.group)
+      .map((i) => i.name)
+      .sort();
+    assert.deepStrictEqual(linked, ['foto_piccione.jpg', 'texture-carta.png', 'totebag_v2.indd'], 'collegamenti trovati');
+    assert.strictEqual(tote.items.find((i) => i.name === 'totebag_v1.indd').sub, 'archive', 'versione vecchia in 99_Archivio');
+    assert.strictEqual(tote.items.find((i) => i.name === 'brief cliente.docx').sub, 'brief');
+    const capsule = find((i) => i.name === 'arianne_capsules_post1.png');
+    assert.strictEqual(capsule.client, 'Arianne e Bea', 'cliente già presente riconosciuto');
+    assert.strictEqual(capsule.project, 'Capsules');
+    assert.ok(find((i) => i.name === 'IMG_1234.jpg').confidence < 70, 'file anonimo da smistare');
+    assert.ok(find((i) => i.name === 'strano.xyz').confidence < 70, 'tipo sconosciuto da smistare');
+    assert.ok(
+      find((i) => i.kind === 'dir' && i.name === 'Brochure Folder'),
+      'pacchetto InDesign intero',
+    );
+    assert.ok(!r.clusters.some((c) => c.items.some((i) => i.from.includes(`${path.sep}sito${path.sep}`))), 'progetti di codice ignorati');
+
+    const log = path.join(root, 'org', 'log.jsonl');
+    const j = await new Journal(log).load();
+    const sid = await j.startSession({ kind: 'riorganizza', label: 'test', root: src });
+    const jobs = r.clusters.filter((c) => c.confidence >= 70).map((c) => ({ cluster: c, client: c.client, project: c.project }));
+    const res = await O.apply(jobs, {
+      destRoot: dest,
+      existing: r.existing,
+      rename: true,
+      journal: j,
+      sessionId: sid,
+      sources: [src],
+      assertMovable: (p) => O.assertMovable(p, orgCtx),
+    });
+    assert.strictEqual(res.failed.length, 0);
+    const proj = path.join(dest, 'Bivio');
+    const [projDir] = fs.readdirSync(proj);
+    assert.ok(/^\d{4}-\d{2}_Totebag$/.test(projDir));
+    const group = path.join(proj, projDir, '02_Lavorazione', 'Bivio_Totebag_v02');
+    assert.ok(fs.existsSync(path.join(group, 'Bivio_Totebag_v02.indd')));
+    assert.ok(fs.existsSync(path.join(group, 'Links', 'Bivio_Totebag_texture_carta.png')), 'disposizione dei collegamenti conservata');
+    const txt = fs.readFileSync(path.join(group, O.LINKS_TXT), 'utf8');
+    assert.ok(txt.includes('foto_piccione.jpg  →  Bivio_Totebag_foto_piccione.jpg'));
+    assert.ok(fs.existsSync(path.join(proj, projDir, '99_Archivio', 'Bivio_Totebag_v01.indd')));
+    assert.ok(
+      fs.existsSync(path.join(dest, 'Arianne e Bea', '2025-03_Capsules', '01_Asset', 'Immagini', 'Arianne_e_Bea_Capsules_post1.png')),
+    );
+    assert.ok(fs.existsSync(path.join(src, 'IMG_1234.jpg')), 'i file da smistare restano dove sono');
+    assert.ok(fs.existsSync(path.join(src, 'Bivio/Totebag/strano.xyz')));
+    assert.throws(() => O.assertMovable(path.join(dest, 'x.jpg'), orgCtx), /Clienti/);
+
+    // il registro sopravvive alla chiusura: lo si rilegge da zero e si ripristina tutto
+    const j2 = await new Journal(log).load();
+    const ids = j2.list()[0].entries.map((e) => e.id);
+    assert.ok(ids.length >= 8);
+    // un file modificato dopo lo spostamento chiede conferma
+    fs.appendFileSync(path.join(group, 'Bivio_Totebag_v02.indd'), 'modifica');
+    const first = await j2.restore(ids);
+    assert.ok(first.needsConfirm.some((i) => i.kind === 'modified'));
+    const back = await j2.restore(ids, { force: true });
+    assert.ok(
+      back.results.every((x) => x.ok),
+      JSON.stringify(back.results.filter((x) => !x.ok)),
+    );
+    for (const rel of [
+      'Bivio/Totebag/totebag_v2.indd',
+      'Bivio/Totebag/Links/texture-carta.png',
+      'Bivio/Totebag/Export/totebag_def.pdf',
+      'arianne_capsules_post1.png',
+    ]) {
+      assert.ok(fs.existsSync(path.join(src, rel)), `ripristinato: ${rel}`);
+    }
+    assert.ok(!fs.existsSync(proj), 'le cartelle create da Fidati vengono tolte');
+    assert.ok(fs.existsSync(path.join(dest, 'Arianne e Bea', '2025-03_Capsules')), 'le cartelle che c’erano già restano');
+    assert.strictEqual(
+      (await new Journal(log).load()).list()[0].entries.every((e) => e.state === 'restored'),
+      true,
+    );
+  }
+
+  // ── 9. Pulizia: dal Cestino alla cartella d'origine ─────────────────────
+  {
+    const { Journal, trashWithLog } = require('./journal.cjs');
+    const fakeTrash = path.join(root, 'trash');
+    fs.mkdirSync(fakeTrash);
+    const doc = write('Documents/preventivo.pdf', 5000);
+    write('preventivo.pdf', 10, fakeTrash); // nel Cestino c'è già un file con lo stesso nome
+    const trashFn = async (p) => fs.renameSync(p, path.join(fakeTrash, 'preventivo 2.pdf')); // come fa il Finder
+    const log = path.join(root, 'pulizia.jsonl');
+    const j = await new Journal(log).load();
+    const sid = await j.startSession({ kind: 'pulizia', label: 'test', root: home });
+    await trashWithLog(j, sid, doc, { trashFn, trashDir: fakeTrash, size: 5000 });
+    assert.ok(!fs.existsSync(doc));
+    const j2 = await new Journal(log).load();
+    const [entry] = j2.list()[0].entries;
+    assert.strictEqual(entry.to, path.join(fakeTrash, 'preventivo 2.pdf'));
+    const res = await j2.restore([entry.id]);
+    assert.ok(res.results[0].ok);
+    assert.strictEqual(fs.statSync(doc).size, 5000, 'tornato nella cartella d’origine');
+    assert.ok(fs.existsSync(path.join(fakeTrash, 'preventivo.pdf')), 'l’altro file nel Cestino non si tocca');
+  }
+
   fs.rmSync(root, { recursive: true, force: true });
   console.log('✓ Tutti i controlli superati');
 })().catch((err) => {

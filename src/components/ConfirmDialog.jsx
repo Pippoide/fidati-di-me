@@ -55,7 +55,9 @@ export default function ConfirmDialog({ plan, busy, onCancel, onConfirm }) {
               altri dispositivi.
             </p>
           )}
-          {plan.hasTrash && <p className="text-muted">I tuoi file personali vanno nel Cestino: puoi recuperarli da lì.</p>}
+          {plan.hasTrash && (
+            <p className="text-muted">I tuoi file personali vanno nel Cestino: se ti sbagli, dalla Cronologia li rimetti nella loro cartella.</p>
+          )}
           {(plan.hasPermanent || plan.hasEmptyTrash) && (
             <p className="text-caution">
               {plan.hasEmptyTrash ? 'Lo svuotamento del Cestino di questo disco' : 'L’eliminazione di node_modules e backup'} è definitiva.

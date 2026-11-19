@@ -1,6 +1,8 @@
 # Fidati
 
-Una piccola app per macOS che analizza le cartelle del tuo Mac, raggruppa i file per tipo e ti aiuta a liberare spazio senza rompere niente.
+Una piccola app per macOS che analizza le cartelle del tuo Mac, raggruppa i file per tipo e ti aiuta a liberare spazio senza rompere niente. Riordina anche i progetti di lavoro (soprattutto Adobe) in una cartella per cliente, e tiene una cronologia di ogni spostamento per poter tornare indietro.
+
+L'app ha tre sezioni: **Pulizia**, **Riorganizza** e **Cronologia**.
 
 Gira in una finestra sua, non nel browser, e si aggiorna da sola tramite GitHub. L'interfaccia è scritta in **React** e **Tailwind CSS**, quindi puoi modificarla come un normale progetto front-end.
 
@@ -134,6 +136,60 @@ Fidati cerca e pulisce:
 
 Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta la cache Adobe** e ti chiede di chiudere l'app e riprovare. Nota: dopo la pulizia Premiere e After Effects rigenerano le anteprime dei progetti alla prima apertura.
 
+### Riorganizza
+
+Legge una cartella (o tutto il disco scelto), riconosce i file di progetto e li **sposta** (non li copia) in questa struttura:
+
+```
+Clienti/
+└── Cliente/
+    └── 2026-11_Progetto/
+        ├── 00_Brief/              documenti, brief, preventivi
+        ├── 01_Asset/
+        │   ├── Immagini/
+        │   ├── Loghi/             .svg, .eps, immagini con "logo" nel nome
+        │   ├── Font/
+        │   └── Video_Audio/
+        ├── 02_Lavorazione/        .psd .ai .indd .aep .prproj .xd .fig…
+        ├── 03_Export/
+        │   ├── Digitale/          png/jpg/mp4/pdf esportati
+        │   └── Stampa/            pdf e tif per la tipografia
+        └── 99_Archivio/           versioni vecchie (_v1, _old, "copia"), zip
+```
+
+La cartella `Clienti` di partenza è `~/Documents/Clienti` sul disco di sistema e `Clienti/` nella radice di un disco esterno; si cambia con **Cambia…**. I clienti e i progetti che ci sono già vengono riconosciuti e riempiti, non duplicati.
+
+**Come riconosce un progetto** (ogni progetto riceve un punteggio di sicurezza da 0 a 100):
+
+- **File collegati**: legge i `.indd`, `.ai`, `.aep`, `.aet` e `.prproj` e trova le immagini, i video e gli altri file che usano.
+- **Cartelle pacchetto** (create da "Pacchetto" di InDesign/Illustrator o da "Raccogli file" di After Effects: `Links`, `Document fonts`, `(Footage)`): si spostano intere, senza toccare niente dentro.
+- **Cartella di progetto**: la cartella con un nome "vero" più vicina al file (cartelle come `Export`, `Links`, `Immagini`, `Def` vengono saltate). La cartella sopra diventa il cliente.
+- **Nome dei file**: `cliente_progetto_….ai`; i file sparsi con lo stesso inizio finiscono insieme.
+- **Clienti già presenti** nella cartella Clienti (basta una parola lunga del nome: "arianne" trova *Arianne e Bea*).
+
+**Regola dei file collegati (mista)**: un file di lavoro e i suoi collegamenti restano insieme, nella stessa disposizione, in `02_Lavorazione/<nome>/`; il resto viene smistato nelle sottocartelle.
+
+**Rinomina** (attivabile): `Cliente_Progetto_descrizione_v01.ext`. Se un gruppo di file collegati viene rinominato o spostato, accanto c'è `Fidati - collegamenti e nomi cambiati.txt` con vecchi e nuovi nomi e percorsi, per ricollegarli in InDesign/After Effects/Premiere con "Ricollega".
+
+**Soglia di sicurezza** (predefinita 70%, si cambia con il cursore e viene ricordata): sotto la soglia un progetto non si sposta. Prima di spostare c'è sempre un'**anteprima** dove puoi correggere cliente e progetto, togliere un progetto o aggiungerne uno sotto soglia scrivendo tu i nomi. Alla fine trovi la **lista di smistamento**: i file che non ho saputo collocare, rimasti dove erano, con un suggerimento; scrivi cliente e progetto e premi **Sposta**.
+
+Non vengono mai toccati: progetti di codice (cartelle con `.git`, `package.json`, `node_modules`…), librerie (Foto, Final Cut, Logic…), app, installer, `~/Library`, cartelle nascoste, cartelle escluse e la cartella Clienti stessa. Le cartelle d'origine rimaste vuote vengono tolte (il ripristino le ricrea).
+
+> Se un'app Adobe è aperta te lo segnalo: chiudi i documenti prima di spostarli.
+
+### Cronologia
+
+Ogni spostamento viene registrato **prima** di essere fatto, in due registri separati che restano anche dopo la chiusura dell'app:
+
+- `~/Library/Application Support/Fidati/log/riorganizzazione.jsonl` → ogni file spostato da Riorganizza (e da "Sposta" nella lista di smistamento)
+- `~/Library/Application Support/Fidati/log/pulizia.jsonl` → solo i file **scelti a mano** e mandati nel Cestino. Cache e dati di sistema eliminati subito non vengono registrati.
+
+Dalla sezione **Cronologia** rimetti i file nella posizione originale: **uno alla volta**, **selezionati**, **una sessione intera** o **tutto**. Per la pulizia, il file viene ripreso dal Cestino (anche se il Finder l'ha rinominato) e torna nella sua cartella.
+
+Prima di ripristinare ti avviso se il file è stato modificato dopo lo spostamento, se al suo posto c'è già un altro file (viene rimesso con "(ripristinato)" nel nome) o se non si trova più (per esempio Cestino svuotato). Quando una sessione è tutta ripristinata, le cartelle e i `.txt` creati da Fidati vengono tolti. Se l'app si chiude a metà di uno spostamento, al riavvio il registro controlla il disco e si rimette in pari.
+
+> Per riprendere file dal Cestino del disco di sistema serve "Accesso completo al disco".
+
 ---
 
 ## Sicurezza
@@ -142,7 +198,8 @@ Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta
 - Prima di ogni eliminazione c'è un ultimo controllo (`assertDeletable` in `electron/scanner.cjs`): rifiuta tutto ciò che è fuori dal disco scelto, le cartelle escluse (anche quelle aggiunte dopo l'analisi), le cartelle principali (`Documenti`, `Scrivania`, `Download`, `Library`…), la radice delle cartelle cloud e, dentro `~/Library`, qualunque cosa non sia in un elenco ristretto di cartelle di cache e log. Su un disco esterno rifiuta le cartelle di sistema del disco.
 - Ogni file viene ricontrollato al momento dell'eliminazione: se non sta più sul disco analizzato (o il disco è stato scollegato), non si tocca.
 - I link simbolici non vengono mai seguiti, e l'analisi non entra in altri dischi montati dentro una cartella.
-- L'app non chiede la password di amministratore e non si collega a internet.
+- Riorganizza sposta solo file del disco scelto, fuori da `~/Library`, dalle app, dalle cartelle nascoste ed escluse (`assertMovable` in `electron/organizer.cjs`), e ricontrolla ogni file prima di spostarlo: se è cambiato dopo l'analisi non lo tocca.
+- L'app non chiede la password di amministratore e non si collega a internet (tranne per controllare gli aggiornamenti).
 
 Puoi verificare la logica su file finti, senza toccare nulla di reale:
 
@@ -169,6 +226,9 @@ fidati/
 │   │   ├── GroupCard.jsx   un gruppo con l'elenco delle voci
 │   │   ├── ConfirmDialog.jsx
 │   │   ├── Sidebar.jsx     scelta del disco e cartelle escluse
+│   │   ├── Organizer.jsx   sezione Riorganizza (impostazioni, anteprima, smistamento)
+│   │   ├── ProjectCard.jsx un progetto proposto, con cliente e progetto modificabili
+│   │   ├── History.jsx     sezione Cronologia e ripristino
 │   │   └── UpdateBanner.jsx
 │   └── lib/
 │       ├── api.js          ponte verso il sistema + dati di esempio
@@ -180,6 +240,9 @@ fidati/
     ├── disks.cjs           dischi collegati e cartelle proposte
     ├── updater.cjs         aggiornamento da GitHub Releases
     ├── categories.cjs      gruppi, estensioni, regole Adobe
+    ├── organizer.cjs       Riorganizza: riconoscimento progetti e spostamenti
+    ├── organizer-rules.cjs struttura delle cartelle, estensioni e parole chiave
+    ├── journal.cjs         Cronologia: registro persistente e ripristino
     └── selftest.cjs        test su file finti
 ```
 
@@ -205,8 +268,12 @@ In alternativa `npm run dev` e apri `http://localhost:5173` nel browser: lì l'i
 | Riconoscere altre cache Adobe | `ADOBE_RE`, `ADOBE_LOG_RE` e `ADOBE_CACHE_DIRS` in `electron/categories.cjs` |
 | Riconoscere altre cartelle cloud | `CLOUD_NAME_RE` in `electron/categories.cjs` |
 | Cambiare quando un disco non è selezionabile | `whyNot` in `electron/disks.cjs` |
+| Cambiare le cartelle di un progetto (00_Brief, 01_Asset…) | `DIRS` in `electron/organizer-rules.cjs` |
+| Decidere dove va un tipo di file | `EXT` e `WORDS` in `electron/organizer-rules.cjs`, funzione `subfolderFor` in `electron/organizer.cjs` |
+| Cambiare la soglia predefinita | `DEFAULT_THRESHOLD` in `electron/organizer-rules.cjs` |
+| Cambiare il formato dei nomi | `newName` dentro `materialize` in `electron/organizer.cjs` |
 
-Dopo ogni modifica a `electron/scanner.cjs` lancia `./fidati.command test`.
+Dopo ogni modifica a `electron/scanner.cjs`, `organizer.cjs` o `journal.cjs` lancia `./fidati.command test`.
 
 ---
 

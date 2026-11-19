@@ -5,6 +5,14 @@ import GroupCard from './components/GroupCard';
 import ConfirmDialog from './components/ConfirmDialog';
 import UpdateBanner from './components/UpdateBanner';
 import Sidebar from './components/Sidebar';
+import Organizer from './components/Organizer';
+import History from './components/History';
+
+const VIEWS = [
+  { id: 'pulizia', title: 'Pulizia' },
+  { id: 'riorganizza', title: 'Riorganizza' },
+  { id: 'cronologia', title: 'Cronologia' },
+];
 
 const LEVELS = [
   { id: 'safe', color: 'bg-safe', title: 'Si può eliminare', hint: 'Cache, log e file temporanei. È ciò che pulisce “Fidati di me”.' },
@@ -13,6 +21,8 @@ const LEVELS = [
 ];
 
 export default function App() {
+  const [view, setView] = useState('pulizia');
+  const [orgBusy, setOrgBusy] = useState(false);
   const [phase, setPhase] = useState('idle'); // idle | scanning | ready
   const [progress, setProgress] = useState({ scanned: 0, current: '' });
   const [groups, setGroups] = useState([]);
@@ -31,7 +41,8 @@ export default function App() {
 
   const disk = disks.find((d) => d.id === diskId) || null;
   const isSystem = disk?.kind !== 'external';
-  const locked = phase === 'scanning' || busy;
+  const locked = phase === 'scanning' || busy || orgBusy;
+  const excludedKey = folders.filter((f) => f.excluded).map((f) => f.path).join('|');
 
   /** id → { item, group } */
   const index = useMemo(() => {
@@ -241,7 +252,23 @@ export default function App() {
       {/* ── intestazione ─────────────────────────────────────────────── */}
       <header className="drag flex items-end justify-between gap-6 border-b border-line px-8 pb-5 pt-10">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl font-bold tracking-tight">Fidati</h1>
+          <div className="flex items-center gap-5">
+            <h1 className="font-display text-3xl font-bold tracking-tight">Fidati</h1>
+            <nav role="tablist" aria-label="Sezioni" className="no-drag flex gap-1 rounded-lg border border-line p-1">
+              {VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  role="tab"
+                  aria-selected={view === v.id}
+                  disabled={locked && view !== v.id}
+                  onClick={() => setView(v.id)}
+                  className={`rounded-md px-3 py-1 text-[13px] disabled:opacity-40 ${view === v.id ? 'bg-raised font-medium' : 'text-muted hover:text-text'}`}
+                >
+                  {v.title}
+                </button>
+              ))}
+            </nav>
+          </div>
           {disk?.total ? (
             <div className="mt-2 w-72">
               <div className="h-1.5 overflow-hidden rounded-full bg-raised">
@@ -255,7 +282,7 @@ export default function App() {
             <p className="mt-1 text-[13px] text-muted">Analizza il Mac e libera spazio senza rompere niente.</p>
           )}
         </div>
-        <div className="no-drag flex flex-none items-center gap-2">
+        {view === 'pulizia' && <div className="no-drag flex flex-none items-center gap-2">
           <button
             className="rounded-lg border border-line px-4 py-2 text-[13px] hover:bg-raised disabled:opacity-50"
             onClick={scan}
@@ -270,11 +297,11 @@ export default function App() {
           >
             Fidati di me{phase === 'ready' && safeSize > 0 ? ` · ${formatBytes(safeSize)}` : ''}
           </button>
-        </div>
+        </div>}
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <Sidebar
+        {view !== 'cronologia' && <Sidebar
           disks={disks}
           diskId={diskId}
           folders={folders}
@@ -282,16 +309,26 @@ export default function App() {
           onSelectDisk={selectDisk}
           onToggleFolder={toggleFolder}
           onPickFolder={pickFolder}
-        />
+        />}
+
+        {view === 'riorganizza' && (
+          <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
+            <UpdateBanner />
+            {api.isMock && <MockNote />}
+            <Organizer disk={disk} resetKey={excludedKey} onBusy={setOrgBusy} onOpenHistory={() => setView('cronologia')} />
+          </main>
+        )}
+        {view === 'cronologia' && (
+          <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
+            {api.isMock && <MockNote />}
+            <History />
+          </main>
+        )}
 
         {/* ── contenuto ────────────────────────────────────────────────── */}
-        <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
+        {view === 'pulizia' && <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
           <UpdateBanner />
-          {api.isMock && (
-            <p className="mb-4 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[12px] text-caution">
-              Anteprima nel browser con dati di esempio: qui non viene analizzato né eliminato nulla.
-            </p>
-          )}
+          {api.isMock && <MockNote />}
           {error && (
             <p className="mb-4 rounded-lg border border-protected/40 bg-protected/10 px-3 py-2 text-[13px] text-protected">{error}</p>
           )}
@@ -383,11 +420,11 @@ export default function App() {
                 </section>
               );
             })}
-        </main>
+        </main>}
       </div>
 
       {/* ── barra di selezione ───────────────────────────────────────── */}
-      {selected.size > 0 && (
+      {view === 'pulizia' && selected.size > 0 && (
         <footer className="flex items-center justify-between border-t border-line bg-panel px-8 py-3">
           <p className="text-[13px]">
             <span className="font-semibold tabular-nums">{formatCount(selected.size)}</span> selezionati ·{' '}
@@ -413,3 +450,9 @@ export default function App() {
     </div>
   );
 }
+
+const MockNote = () => (
+  <p className="mb-4 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[12px] text-caution">
+    Anteprima nel browser con dati di esempio: qui non viene analizzato, spostato né eliminato nulla.
+  </p>
+);
