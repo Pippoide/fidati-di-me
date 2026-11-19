@@ -5,6 +5,7 @@ import GroupCard from './components/GroupCard';
 import ConfirmDialog from './components/ConfirmDialog';
 import UpdateBanner from './components/UpdateBanner';
 import Sidebar from './components/Sidebar';
+import TransferView from './components/TransferView';
 
 const LEVELS = [
   { id: 'safe', color: 'bg-safe', title: 'Si può eliminare', hint: 'Cache, log e file temporanei. È ciò che pulisce “Fidati di me”.' },
@@ -13,6 +14,7 @@ const LEVELS = [
 ];
 
 export default function App() {
+  const [mode, setMode] = useState('clean'); // clean | transfer
   const [phase, setPhase] = useState('idle'); // idle | scanning | ready
   const [progress, setProgress] = useState({ scanned: 0, current: '' });
   const [groups, setGroups] = useState([]);
@@ -241,8 +243,29 @@ export default function App() {
       {/* ── intestazione ─────────────────────────────────────────────── */}
       <header className="drag flex items-end justify-between gap-6 border-b border-line px-8 pb-5 pt-10">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl font-bold tracking-tight">Fidati</h1>
-          {disk?.total ? (
+          <div className="flex items-center gap-4">
+            <h1 className="font-display text-3xl font-bold tracking-tight">Fidati</h1>
+            <div role="tablist" aria-label="Funzione" className="no-drag flex rounded-lg border border-line p-0.5 text-[12px]">
+              {[
+                ['clean', 'Pulizia'],
+                ['transfer', 'Trasferimento ordinato'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={mode === id}
+                  disabled={locked}
+                  onClick={() => setMode(id)}
+                  className={`rounded-md px-3 py-1 disabled:opacity-50 ${mode === id ? 'bg-raised text-text' : 'text-muted hover:text-text'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {mode === 'transfer' ? (
+            <p className="mt-1 text-[13px] text-muted">Copia i progetti da un disco all’altro, ognuno al suo posto.</p>
+          ) : disk?.total ? (
             <div className="mt-2 w-72">
               <div className="h-1.5 overflow-hidden rounded-full bg-raised">
                 <div className="h-full rounded-full bg-text" style={{ width: `${Math.min(100, (used / disk.total) * 100)}%` }} />
@@ -255,7 +278,7 @@ export default function App() {
             <p className="mt-1 text-[13px] text-muted">Analizza il Mac e libera spazio senza rompere niente.</p>
           )}
         </div>
-        <div className="no-drag flex flex-none items-center gap-2">
+        <div className={`no-drag flex flex-none items-center gap-2 ${mode === 'clean' ? '' : 'hidden'}`}>
           <button
             className="rounded-lg border border-line px-4 py-2 text-[13px] hover:bg-raised disabled:opacity-50"
             onClick={scan}
@@ -273,7 +296,12 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <main className={`min-h-0 flex-1 overflow-y-auto px-8 py-6 ${mode === 'transfer' ? '' : 'hidden'}`}>
+        {mode === 'transfer' && <UpdateBanner />}
+        <TransferView disks={disks} />
+      </main>
+
+      <div className={`flex min-h-0 flex-1 ${mode === 'clean' ? '' : 'hidden'}`}>
         <Sidebar
           disks={disks}
           diskId={diskId}
@@ -286,7 +314,7 @@ export default function App() {
 
         {/* ── contenuto ────────────────────────────────────────────────── */}
         <main className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
-          <UpdateBanner />
+          {mode === 'clean' && <UpdateBanner />}
           {api.isMock && (
             <p className="mb-4 rounded-lg border border-caution/40 bg-caution/10 px-3 py-2 text-[12px] text-caution">
               Anteprima nel browser con dati di esempio: qui non viene analizzato né eliminato nulla.
@@ -387,7 +415,7 @@ export default function App() {
       </div>
 
       {/* ── barra di selezione ───────────────────────────────────────── */}
-      {selected.size > 0 && (
+      {mode === 'clean' && selected.size > 0 && (
         <footer className="flex items-center justify-between border-t border-line bg-panel px-8 py-3">
           <p className="text-[13px]">
             <span className="font-semibold tabular-nums">{formatCount(selected.size)}</span> selezionati ·{' '}

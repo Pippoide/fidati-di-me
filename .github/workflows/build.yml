@@ -1,17 +1,19 @@
 # A ogni push sul branch "build": compila Fidati.app su un Mac di GitHub
 # e pubblica una nuova release (dmg per installare, zip per l'updater interno).
+# Sul branch "Build_BK" fa lo stesso ma come pre-release di prova: non arriva
+# a chi usa l'app tramite l'aggiornamento automatico.
 name: Build Fidati
 
 on:
   push:
-    branches: [build]
+    branches: [build, Build_BK]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: build
+  group: build-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -19,6 +21,7 @@ jobs:
     runs-on: macos-latest
     env:
       VERSION: 1.0.${{ github.run_number }}
+      BK: ${{ github.ref_name == 'Build_BK' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -45,7 +48,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" release/*.dmg release/*.zip \
-            --target "$GITHUB_SHA" \
-            --title "Fidati $VERSION" \
-            --notes "Scarica il file .dmg: **arm64** per Mac con chip Apple (M1 e successivi), **x64** per Mac Intel. Chi ha già Fidati installata riceve l'aggiornamento dall'app."
+          if [ "$BK" = "true" ]; then
+            gh release create "v$VERSION-bk" release/*.dmg release/*.zip \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "Fidati $VERSION · Build_BK (prova)" \
+              --notes "Versione di prova dal branch Build_BK: aggiunge il **Trasferimento ordinato**. Non viene proposta dall'aggiornamento automatico. Scarica il .dmg: **arm64** per Mac con chip Apple, **x64** per Mac Intel."
+          else
+            gh release create "v$VERSION" release/*.dmg release/*.zip \
+              --target "$GITHUB_SHA" \
+              --title "Fidati $VERSION" \
+              --notes "Scarica il file .dmg: **arm64** per Mac con chip Apple (M1 e successivi), **x64** per Mac Intel. Chi ha già Fidati installata riceve l'aggiornamento dall'app."
+          fi

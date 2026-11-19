@@ -28,6 +28,7 @@ All'avvio Fidati controlla se su GitHub c'è una versione più nuova. Se c'è, c
 | --- | --- |
 | `dev` | Dove si lavora. I push qui non producono nulla. |
 | `build` | Rilascio. Ogni push qui fa partire la build su GitHub. |
+| `Build_BK` | Build di prova con il **Trasferimento ordinato**. Ogni push pubblica una *pre-release* `v1.0.N-bk`: si installa a mano dal `.dmg` e non viene proposta dall'aggiornamento automatico. |
 
 Quando `dev` è pronto, portalo in `build` (pull request `dev → build` su GitHub, oppure `git checkout build && git merge dev && git push`). GitHub Actions (`.github/workflows/build.yml`) allora:
 
@@ -134,6 +135,28 @@ Fidati cerca e pulisce:
 
 Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta la cache Adobe** e ti chiede di chiudere l'app e riprovare. Nota: dopo la pulizia Premiere e After Effects rigenerano le anteprime dei progetti alla prima apertura.
 
+### Trasferimento ordinato
+
+Dalla scheda **Trasferimento ordinato** in alto copi i progetti da un disco (o cartella) di partenza a uno di arrivo, mettendo ognuno al suo posto nella gerarchia che c'è già all'arrivo. **È solo una copia**: la partenza non viene spostata né modificata, e un file che esiste già all'arrivo non viene mai sovrascritto.
+
+1. **Partenza e arrivo**: scegli un disco collegato o una cartella qualsiasi per ciascuno.
+2. **Struttura**: Fidati legge le cartelle e propone la gerarchia, ad esempio `Cliente / Anno / Progetto / Sottoprogetto`, con gli esempi trovati a ogni livello. Riconosce gli anni (`2024`, `2025`…) e capisce dove inizia il contenuto (cartelle come `Assets`, `Export`, `Links` o che contengono file `.prproj`, `.aep`, `.psd`, `.ai`, `.indd`…). Correggi le etichette o il numero di livelli e **conferma l'ordine**.
+3. **Piano**: scende livello per livello. Se la cartella esiste già all'arrivo ci entra; la prima che non esiste viene copiata lì dentro, intera. Se esiste anche l'ultimo livello, aggiunge solo i file mancanti. Esempio:
+
+   ```
+   HD A                                  HD B
+   Rossi/2025/Spot Estate/               Rossi/2025/Spot Estate/
+       Sottoprogetto 1A/Assets, Export       Sottoprogetto 1B
+       Sottoprogetto 2                   Rossi/2025/Progetto 2
+   ```
+
+   `Spot Estate` esiste in entrambi, quindi `Sottoprogetto 1A` e `Sottoprogetto 2` vengono copiati dentro `HD B/Rossi/2025/Spot Estate`, accanto a `Sottoprogetto 1B`, che resta com'è.
+
+   Ogni voce dice dove andrebbe e perché: *corrispondenza esatta* (stesso nome, a meno di maiuscole, accenti, `_` e `-`), *nome simile* (es. `SpotEstate` ↔ `Spot Estate`, da verificare), *stesso nome in un altro punto dell'arrivo* (te lo propone come alternativa). Le voci dubbie partono **non selezionate**. Nomi che differiscono per numeri o sigle (`Sottoprogetto 1A` e `1B`) non vengono mai considerati la stessa cartella.
+4. **Selezione e copia**: spunta cosa copiare e conferma. Con **Scegli dove…** mandi una voce nella cartella che preferisci (dentro l'arrivo). Quello che non selezioni resta alla partenza e lo ritrovi in *Non selezionati* anche dopo la copia, per sistemarlo a mano.
+
+Ogni copia viene annotata in `~/Library/Application Support/Fidati/trasferimenti.log`. Prima di iniziare Fidati controlla che all'arrivo ci sia abbastanza spazio; puoi interrompere in qualsiasi momento (quanto già copiato resta).
+
 ---
 
 ## Sicurezza
@@ -142,6 +165,7 @@ Se un'app Adobe è aperta, la sua cache è in uso: Fidati se ne accorge, **salta
 - Prima di ogni eliminazione c'è un ultimo controllo (`assertDeletable` in `electron/scanner.cjs`): rifiuta tutto ciò che è fuori dal disco scelto, le cartelle escluse (anche quelle aggiunte dopo l'analisi), le cartelle principali (`Documenti`, `Scrivania`, `Download`, `Library`…), la radice delle cartelle cloud e, dentro `~/Library`, qualunque cosa non sia in un elenco ristretto di cartelle di cache e log. Su un disco esterno rifiuta le cartelle di sistema del disco.
 - Ogni file viene ricontrollato al momento dell'eliminazione: se non sta più sul disco analizzato (o il disco è stato scollegato), non si tocca.
 - I link simbolici non vengono mai seguiti, e l'analisi non entra in altri dischi montati dentro una cartella.
+- Il trasferimento ordinato legge soltanto la partenza; all'arrivo crea file con copia esclusiva (`COPYFILE_EXCL`), quindi un file esistente non si sovrascrive. Rifiuta destinazioni fuori dall'arrivo o dentro la partenza, e partenza e arrivo annidati l'una nell'altra.
 - L'app non chiede la password di amministratore e non si collega a internet.
 
 Puoi verificare la logica su file finti, senza toccare nulla di reale:

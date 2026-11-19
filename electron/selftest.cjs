@@ -243,6 +243,101 @@ const dev = (p) => fs.lstatSync(p).dev;
     assert.strictEqual((await check({ current: '1.0.0', fetchImpl: fake({}, 404) })).latest, undefined);
   }
 
+  // ── 8. trasferimento ordinato: l'esempio HD A → HD B ─────────────────────
+  {
+    const T = require('./transfer.cjs');
+    const A = path.join(root, 'HD A');
+    const B = path.join(root, 'HD B');
+    write('Rossi/2025/Spot Estate/Sottoprogetto 1A/Assets/logo.png', 3000, A);
+    write('Rossi/2025/Spot Estate/Sottoprogetto 1A/Export/spot.mp4', 9000, A);
+    write('Rossi/2025/Spot Estate/Sottoprogetto 1A/spot.prproj', 2000, A);
+    write('Rossi/2025/Spot Estate/Sottoprogetto 2/post.ai', 1000, A);
+    write('Rossi/2025/Spot Estate/Montaggio/v1.prproj', 1000, A);
+    write('Rossi/2025/Spot Estate/Montaggio/v2.prproj', 1000, A);
+    write('Rossi/2025/Spot Estate/brief.pdf', 500, A);
+    write('Rossi/2024/Catalogo/Stampa/catalogo.indd', 4000, A);
+    write('Bianchi/2025/Logo/Def/logo.ai', 1500, A);
+    write('Verdi/2025/SpotEstate/Social/reel.psd', 1500, A);
+    write('Rossi/2025/Spot Estate/Sottoprogetto 1B/x.psd', 100, B);
+    write('Rossi/2025/Spot Estate/Montaggio/v1.prproj', 7, B); // diverso: NON va sovrascritto
+    write('Rossi/2025/Progetto 2/y.psd', 100, B);
+    write('Verdi/2025/Spot Estate/Social/reel.psd', 77, B);
+    write('Archivio/Bianchi/vecchio.ai', 100, B);
+    const before = fs.readFileSync(path.join(A, 'Rossi/2025/Spot Estate/Sottoprogetto 1A/Export/spot.mp4'));
+
+    const src = await T.readTree(A);
+    const dst = await T.readTree(B);
+    const det = T.detectLevels(src.tree);
+    assert.strictEqual(det.suggested, 4, 'Cliente / Anno / Progetto / Sottoprogetto');
+    assert.deepStrictEqual(det.levels.map((l) => l.role), ['Cliente', 'Anno', 'Progetto', 'Sottoprogetto', 'Contenuto']);
+
+    const plan = await T.buildPlan({ srcTree: src.tree, destTree: dst.tree, depth: 4, roles: det.levels.map((l) => l.role) });
+    const at = (rel) => plan.find((e) => path.relative(A, e.srcDir) === rel);
+    const to = (e) => path.relative(B, e.destDir);
+
+    // Spot Estate esiste in entrambi: dentro ci va solo il Sottoprogetto 1A (e il 2)
+    assert.strictEqual(at('Rossi/2025/Spot Estate/Sottoprogetto 1A').kind, 'new');
+    assert.strictEqual(to(at('Rossi/2025/Spot Estate/Sottoprogetto 1A')), 'Rossi/2025/Spot Estate/Sottoprogetto 1A');
+    assert.strictEqual(at('Rossi/2025/Spot Estate/Sottoprogetto 1A').files, 3);
+    assert.strictEqual(to(at('Rossi/2025/Spot Estate/Sottoprogetto 2')), 'Rossi/2025/Spot Estate/Sottoprogetto 2');
+    assert.ok(!at('Rossi/2025/Spot Estate/Sottoprogetto 1B'), 'quello che c’è solo all’arrivo non si tocca');
+    // Montaggio c'è già: si aggiunge solo v2, v1 resta quello dell'arrivo
+    const mont = at('Rossi/2025/Spot Estate/Montaggio');
+    assert.strictEqual(mont.kind, 'merge');
+    assert.deepStrictEqual([mont.files, mont.skipped], [1, 1]);
+    // file sciolti nel progetto
+    assert.strictEqual(at('Rossi/2025/Spot Estate').kind, 'loose');
+    // un anno che manca: si crea dentro il cliente che c'è già
+    assert.strictEqual(to(at('Rossi/2024')), 'Rossi/2024');
+    // un cliente nuovo, ma con lo stesso nome altrove: suggerito e non selezionato
+    const bianchi = at('Bianchi');
+    assert.strictEqual(bianchi.kind, 'new');
+    assert.strictEqual(bianchi.selected, false);
+    assert.strictEqual(path.relative(B, bianchi.suggestions[0].destDir), 'Archivio/Bianchi');
+    // nome simile (SpotEstate ↔ Spot Estate): proposto ma da verificare
+    const verdi = at('Verdi/2025/SpotEstate/Social');
+    assert.strictEqual(verdi.match, 'similar');
+    assert.strictEqual(verdi.selected, false);
+    assert.strictEqual(verdi.kind, 'present', 'reel.psd c’è già all’arrivo');
+
+    // copia di tutto ciò che è selezionato
+    const ctx = { srcRoot: A, destRoot: B };
+    for (const e of plan.filter((x) => x.selected)) {
+      const r = await T.copyEntry(e, ctx);
+      assert.deepStrictEqual(r.errors, []);
+    }
+    assert.ok(fs.existsSync(path.join(B, 'Rossi/2025/Spot Estate/Sottoprogetto 1A/Export/spot.mp4')));
+    assert.ok(fs.existsSync(path.join(B, 'Rossi/2025/Spot Estate/Sottoprogetto 1A/Assets/logo.png')));
+    assert.ok(fs.existsSync(path.join(B, 'Rossi/2025/Spot Estate/Montaggio/v2.prproj')));
+    assert.ok(fs.existsSync(path.join(B, 'Rossi/2025/Spot Estate/brief.pdf')));
+    assert.ok(fs.existsSync(path.join(B, 'Rossi/2024/Catalogo/Stampa/catalogo.indd')));
+    assert.strictEqual(fs.statSync(path.join(B, 'Rossi/2025/Spot Estate/Montaggio/v1.prproj')).size, 7, 'nessuna sovrascrittura');
+    assert.ok(!fs.existsSync(path.join(B, 'Bianchi')), 'i non selezionati restano dove sono');
+    // la partenza è intatta
+    assert.ok(before.equals(fs.readFileSync(path.join(A, 'Rossi/2025/Spot Estate/Sottoprogetto 1A/Export/spot.mp4'))));
+    assert.ok(fs.existsSync(path.join(A, 'Bianchi/2025/Logo/Def/logo.ai')));
+
+    // rifacendo il piano, quello copiato risulta "già presente"
+    const again = await T.buildPlan({ srcTree: (await T.readTree(A)).tree, destTree: (await T.readTree(B)).tree, depth: 4, roles: [] });
+    assert.ok(again.filter((e) => e.selected).length === 0, 'niente da ricopiare');
+
+    // destinazione scelta dall'utente per un non selezionato
+    const moved = await T.remeasure(bianchi, path.join(B, 'Da sistemare', 'Bianchi'), { match: 'manual' });
+    await T.copyEntry(moved, ctx);
+    assert.ok(fs.existsSync(path.join(B, 'Da sistemare/Bianchi/2025/Logo/Def/logo.ai')));
+
+    // barriere: mai copiare fuori dall'arrivo o dentro la partenza
+    assert.throws(() => T.assertCopyTarget(path.join(root, 'altrove'), ctx), /fuori/);
+    assert.throws(() => T.assertCopyTarget(path.join(B, '../HD A/x'), ctx));
+    assert.throws(() => T.assertCopyTarget(path.join(A, 'x'), { srcRoot: A, destRoot: root }), /partenza/);
+    assert.strictEqual(T.compareNames('2024', '2025'), null);
+    assert.strictEqual(T.compareNames('Spot Estate', 'spot-estate'), 'exact');
+    assert.strictEqual(T.compareNames('Sottoprogetto 1A', 'Sottoprogetto 1B'), null);
+    assert.strictEqual(T.compareNames('Progetto A', 'Progetto B'), null);
+    assert.strictEqual(T.compareNames('Catalgo 2024', 'Catalogo 2024'), 'similar');
+    assert.strictEqual(T.compareNames('01 Brief', 'Brief'), 'similar');
+  }
+
   fs.rmSync(root, { recursive: true, force: true });
   console.log('✓ Tutti i controlli superati');
 })().catch((err) => {
